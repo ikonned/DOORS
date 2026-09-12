@@ -1,13 +1,13 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "lightninghax [ Matex_xyz ]",
+    Name = "lightninghax [ Ikonned ]",
     LoadingTitle = "Loading...",
-    LoadingSubtitle = "by @matex_xyz",
+    LoadingSubtitle = "by @Ikonned",
     ConfigurationSaving = {
         Enabled = true,
-        FolderName = "ExampleHub2",
-        FileName = "Settings2"
+        FolderName = "ExampleHub2019",
+        FileName = "Settings2019"
     },
     Discord = {
         Enabled = false,
@@ -19,7 +19,7 @@ local Window = Rayfield:CreateWindow({
 
 Rayfield:Notify({
    Title = "lightninghax Successfully Loaded",
-   Content = "By @matex_xyz",
+   Content = "By @Ikonned",
    Duration = 11.5,
    Image = 98381986793772,
 })
