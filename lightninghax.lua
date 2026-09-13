@@ -24,6 +24,18 @@ Rayfield:Notify({
    Image = 98381986793772,
 })
 
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
+local StarterGui = game:GetService("StarterGui")
+
+local LocalPlayer = Players.LocalPlayer
+local RemotesFolder = ReplicatedStorage:WaitForChild("RemotesFolder")
+
+local function GetCharacter()
+    return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+end
+
 -- TABS
 local HomeTab = Window:CreateTab("Home", 98381986793772)
 local ExploitsTab = Window:CreateTab("Exploits", 10448639430)
