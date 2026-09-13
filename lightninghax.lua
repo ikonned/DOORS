@@ -2632,3 +2632,5 @@ Tools:CreateToggle({
         print("Ikonned UI Debug:", Value)
     end
 })
+
+Rayfield:LoadConfiguration()
