@@ -1311,6 +1311,119 @@ local function removeObjectiveESP()
     end
 end
 
+--======================================================
+-- PLAYER HITBOX ESP
+--======================================================
+
+local PlayerESPEnabled = false
+local PlayerESPObjects = {}
+
+local function RemovePlayerESP(Player)
+    local Box = PlayerESPObjects[Player]
+
+    if Box then
+        Box:Destroy()
+        PlayerESPObjects[Player] = nil
+    end
+end
+
+local function AddPlayerESP(Player)
+    if Player == LocalPlayer or not PlayerESPEnabled then
+        return
+    end
+
+    local Character = Player.Character
+    if not Character then
+        return
+    end
+
+    local RootPart = Character:FindFirstChild("HumanoidRootPart")
+    if not RootPart then
+        return
+    end
+
+    RemovePlayerESP(Player)
+
+    local Box = Instance.new("BoxHandleAdornment")
+    Box.Name = "PlayerHitboxESP"
+    Box.Adornee = RootPart
+    Box.Size = Vector3.new(4, 6, 2)
+    Box.Color3 = Color3.fromRGB(255, 255, 255)
+    Box.Transparency = 0.35
+    Box.AlwaysOnTop = true
+    Box.ZIndex = 5
+    Box.Parent = RootPart
+
+    PlayerESPObjects[Player] = Box
+end
+
+local function UpdatePlayerESP()
+    for _, Player in ipairs(Players:GetPlayers()) do
+        if Player ~= LocalPlayer then
+            AddPlayerESP(Player)
+        end
+    end
+end
+
+-- RAYFIELD TOGGLE
+ChamsTab:CreateToggle({
+    Name = "Player Hitbox ESP",
+    CurrentValue = false,
+    Flag = "PlayerHitboxESP",
+
+    Callback = function(Value)
+        PlayerESPEnabled = Value
+
+        if Value then
+            UpdatePlayerESP()
+        else
+            for Player in pairs(PlayerESPObjects) do
+                RemovePlayerESP(Player)
+            end
+        end
+    end,
+})
+
+-- Existing players + respawns
+for _, Player in ipairs(Players:GetPlayers()) do
+    if Player ~= LocalPlayer then
+
+        Player.CharacterAdded:Connect(function(Character)
+            local RootPart = Character:WaitForChild("HumanoidRootPart", 10)
+
+            if RootPart then
+                task.wait(0.1)
+                AddPlayerESP(Player)
+            end
+        end)
+
+        if Player.Character then
+            task.defer(function()
+                AddPlayerESP(Player)
+            end)
+        end
+    end
+end
+
+-- New players
+Players.PlayerAdded:Connect(function(Player)
+
+    Player.CharacterAdded:Connect(function(Character)
+        local RootPart = Character:WaitForChild("HumanoidRootPart", 10)
+
+        if RootPart then
+            task.wait(0.1)
+            AddPlayerESP(Player)
+        end
+    end)
+
+end)
+
+-- Remove ESP when player leaves
+Players.PlayerRemoving:Connect(function(Player)
+    RemovePlayerESP(Player)
+end)
+
 ChamsTab:CreateToggle({
     Name = "ESP Objectives + Doors",
     CurrentValue = false,
