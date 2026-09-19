@@ -1317,6 +1317,8 @@ end
 
 local PlayerESPEnabled = false
 local PlayerESPObjects = {}
+local RainbowConnection = nil
+local RainbowHue = 0
 
 local function RemovePlayerESP(Player)
     local Box = PlayerESPObjects[Player]
@@ -1348,7 +1350,10 @@ local function AddPlayerESP(Player)
     Box.Name = "PlayerHitboxESP"
     Box.Adornee = RootPart
     Box.Size = Vector3.new(4, 6, 2)
-    Box.Color3 = Color3.fromRGB(255, 255, 255)
+
+    -- Rainbow color is updated below
+    Box.Color3 = Color3.fromHSV(RainbowHue, 1, 1)
+
     Box.Transparency = 0.35
     Box.AlwaysOnTop = true
     Box.ZIndex = 5
@@ -1365,9 +1370,27 @@ local function UpdatePlayerESP()
     end
 end
 
+-- Slowly cycle through the rainbow
+RainbowConnection = game:GetService("RunService").Heartbeat:Connect(function(DeltaTime)
+    if not PlayerESPEnabled then
+        return
+    end
+
+    -- Lower number = slower rainbow
+    RainbowHue = (RainbowHue + DeltaTime * 0.025) % 1
+
+    local RainbowColor = Color3.fromHSV(RainbowHue, 1, 1)
+
+    for _, Box in pairs(PlayerESPObjects) do
+        if Box and Box.Parent then
+            Box.Color3 = RainbowColor
+        end
+    end
+end)
+
 -- RAYFIELD TOGGLE
 ChamsTab:CreateToggle({
-    Name = "Player Hitbox ESP",
+    Name = "Player ESP",
     CurrentValue = false,
     Flag = "PlayerHitboxESP",
 
