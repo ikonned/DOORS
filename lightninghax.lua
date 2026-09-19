@@ -2583,27 +2583,6 @@ ExtraTab:CreateParagraph({
     Content = "Credits to Kodbol for helping me"
 }) 
 
-ExtraTab:CreateButton({
-    Name = "Reset",
-    Callback = function()
-        LocalPlayer.Character:WaitForChild("Humanoid").Health = 0
-    end
-})
-
-ExtraTab:CreateButton({
-    Name = "Play Again",
-    Callback = function()
-        RemotesFolder.PlayAgain:FireServer()
-    end
-})
-
-ExtraTab:CreateButton({
-    Name = "Return To Lobby",
-    Callback = function()
-        RemotesFolder.Lobby:FireServer()
-    end
-})
-
 --======================================================
 -- TOOLS
 --======================================================
@@ -2756,17 +2735,5 @@ Tools:CreateButton({
 --======================================================
 -- DEBUG
 --======================================================
-
-Tools:CreateSection("Debug")
-
-Tools:CreateToggle({
-    Name = "Show Debug Info",
-    CurrentValue = false,
-    Flag = "DebugInfo",
-
-    Callback = function(Value)
-        print("Ikonned UI Debug:", Value)
-    end
-})
 
 Rayfield:LoadConfiguration()
