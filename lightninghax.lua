@@ -1,3 +1,4 @@
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -24,36 +25,168 @@ Rayfield:Notify({
    Image = 98381986793772,
 })
 
+local LightningHaxAlive = true
+local TabletSuppressingESP = false
+local function LightningAlive()
+    return LightningHaxAlive
+end
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TeleportService = game:GetService("TeleportService")
 local StarterGui = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
+
+
 local RemotesFolder = ReplicatedStorage:WaitForChild("RemotesFolder")
 
 local function GetCharacter()
     return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 end
 
--- TABS
-local HomeTab = Window:CreateTab("Home", 98381986793772)
+local HomeTab = Window:CreateTab("Mods", 98381986793772)
 local ExploitsTab = Window:CreateTab("Exploits", 10448639430)
-local ChamsTab = Window:CreateTab("Chams", 14380950090)
+local ChamsTab = Window:CreateTab("ESP", 14380950090)
 local SpawnsTab = Window:CreateTab("Spawns", 11278229112)
-local PlushysTab = Window:CreateTab("Plushys", 11924266902)
-local ExtraTab = Window:CreateTab("Extra", 16587986504)
-local Tools = Window:CreateTab("Tools", 0)
+local PlushysTab = Window:CreateTab("Plushies", 11924266902)
+local UtilitiesTab = Window:CreateTab("Utilities", 4483362458)
+local CreditsTab = Window:CreateTab("Credits", 16587986504)
 
--- PARAGRAPH
+CreditsTab:CreateParagraph({
+    Title = "Special Thanks",
+    Content = "Huge thanks to deathgod0784 for the extensive rework, new features, fixes, testing, and improvements that helped bring lightninghax to its current state."
+})
+CreditsTab:CreateParagraph({
+    Title = "Thanks",
+    Content = "Thanks to @Ikonned for creating lightninghax."
+})
+
+
 HomeTab:CreateParagraph({
     Title = "Note:",
     Content = "Execute Figure or Seek MODS in the room they will spawn in"
 })
 
----------------------------------------------------
--- HOME SECTION
----------------------------------------------------
+
+local TabletViewActive=false
+TabletSuppressingESP=false
+local TabletESPResumeState=nil
+
+local function SetTabletESPMode(active)
+    if active then
+        if TabletViewActive then return end
+        TabletViewActive=true
+        TabletSuppressingESP=true
+
+        TabletESPResumeState={
+            Door=DoorESPEnabled,
+            Chest=ChestESPEnabled,
+            Item=ItemESPEnabled,
+            Objective=ObjectiveESPEnabled,
+            Player=PlayerESPEnabled,
+            Entity=EntityESPEnabled,
+        }
+
+        if DoorESPEnabled then
+            DoorESPEnabled=false
+            if DoorESPConnection then DoorESPConnection:Disconnect(); DoorESPConnection=nil end
+            table.clear(DoorPending)
+            RemoveNamedESP("RealDoorESP","RealDoorCrossFill","RealDoorOuterBorder","RealDoorESPLabel")
+        end
+
+        if ChestESPEnabled then
+            ChestESPEnabled=false
+            if ChestESPConnection then ChestESPConnection:Disconnect(); ChestESPConnection=nil end
+            RemoveNamedESP("ChestESP","ChestESPLabel")
+        end
+
+        if ItemESPEnabled then
+            ItemESPEnabled=false
+            if ItemESPConnection then ItemESPConnection:Disconnect(); ItemESPConnection=nil end
+            RemoveNamedESP("ItemESP","ItemESPLabel")
+        end
+
+        if ObjectiveESPEnabled then
+            ObjectiveESPEnabled=false
+            if ObjectiveConnection then ObjectiveConnection:Disconnect(); ObjectiveConnection=nil end
+            RemoveNamedESP("ObjectiveESP","ObjectiveESPLabel","KeyESP","KeyESPLabel")
+        end
+
+        if PlayerESPEnabled then
+            PlayerESPEnabled=false
+            for player in pairs(PlayerESPObjects) do
+                RemovePlayerESP(player)
+            end
+        end
+
+        if EntityESPEnabled then
+            EntityESPEnabled=false
+            for model,data in pairs(EntityBillboards) do
+                if data.gui and data.gui.Parent then data.gui:Destroy() end
+                EntityBillboards[model]=nil
+            end
+            for _,obj in ipairs(workspace.CurrentRooms:GetDescendants()) do
+                if obj.Name=="FigureESP" and obj:IsA("Highlight") then obj:Destroy() end
+            end
+            for hitbox,transparency in pairs(FigureHitboxTransparency) do
+                if hitbox and hitbox.Parent then hitbox.Transparency=transparency end
+                FigureHitboxTransparency[hitbox]=nil
+            end
+        end
+    else
+        if not TabletViewActive then return end
+        TabletViewActive=false
+        TabletSuppressingESP=false
+
+        local resume=TabletESPResumeState
+        TabletESPResumeState=nil
+        if not resume then return end
+
+        if resume.Door then
+            DoorESPEnabled=true
+            ScanDoors()
+            DoorESPConnection=workspace.CurrentRooms.ChildAdded:Connect(function(room)
+                if LightningHaxAlive and DoorESPEnabled and IsRoomInESPRange(room) then QueueDoor(room) end
+            end)
+        end
+
+        if resume.Chest then
+            ChestESPEnabled=true
+            ScanChests()
+            ChestESPConnection=workspace.CurrentRooms.ChildAdded:Connect(function(room)
+                if LightningHaxAlive and ChestESPEnabled and IsRoomInESPRange(room) then task.delay(0.25,ScanChests) end
+            end)
+        end
+
+        if resume.Item then
+            ItemESPEnabled=true
+            ScanItems()
+            ItemESPConnection=workspace.CurrentRooms.ChildAdded:Connect(function(room)
+                if LightningHaxAlive and ItemESPEnabled and IsRoomInESPRange(room) then task.delay(0.25,ScanItems) end
+            end)
+        end
+
+        if resume.Objective then
+            ObjectiveESPEnabled=true
+            ScanObjectives()
+            ObjectiveConnection=workspace.CurrentRooms.ChildAdded:Connect(function(room)
+                if LightningHaxAlive and ObjectiveESPEnabled and IsRoomInESPRange(room) then task.delay(0.25,ScanObjectives) end
+            end)
+        end
+
+        if resume.Player then
+            PlayerESPEnabled=true
+            for _,player in ipairs(Players:GetPlayers()) do AddPlayerESP(player) end
+        end
+
+        if resume.Entity then
+            EntityESPEnabled=true
+            EnsureEntityWatchers()
+            ScanEntities()
+        end
+    end
+end
 
 HomeTab:CreateButton({
     Name = "Mischievous Tablet Chest [ HOTEL 0 ]",
@@ -85,7 +218,6 @@ HomeTab:CreateButton({
         local IsScannerOpened = false
         local Equipped = false
         
-        -- tables
         local ScannerObjectives = {
             "KeyObtain",
             "LeverForGate",
@@ -106,7 +238,6 @@ HomeTab:CreateButton({
         local LoadedAnimations = {}
         
         
-        -- Animation Functions
         local function ScannerStaticStart()
             ScannerViewportFrame.OffScreen.Visible = false
         
@@ -168,7 +299,6 @@ HomeTab:CreateButton({
             ScannerViewportFrame.Static1.Image = static_image
         end
         
-        -- Essential Functions
         
         local function SetupScannerView(room)
             local ScannerRoomView = Instance.new("Model", ScannerViewportFrame.ViewNormal)
@@ -177,6 +307,24 @@ HomeTab:CreateButton({
             local function SetupCloneRoomPart(instance)
                 if instance:IsA("BasePart") and instance.Transparency ~= 1 and instance.Size.Magnitude > 0.2 then
                     local current_room_part = instance:Clone()
+
+                    for _, child in ipairs(current_room_part:GetDescendants()) do
+                        if child:IsA("Highlight")
+                            or child:IsA("BoxHandleAdornment")
+                            or child:IsA("BillboardGui")
+                            or string.find(child.Name, "ESP", 1, true) then
+                            child:Destroy()
+                        end
+                    end
+
+                    for _, child in ipairs(current_room_part:GetChildren()) do
+                        if child:IsA("Highlight")
+                            or child:IsA("BoxHandleAdornment")
+                            or child:IsA("BillboardGui")
+                            or string.find(child.Name, "ESP", 1, true) then
+                            child:Destroy()
+                        end
+                    end
         
                     current_room_part.CanQuery = false
                     current_room_part.Parent = ScannerRoomView
@@ -210,10 +358,12 @@ HomeTab:CreateButton({
             end
         
             local connection = room.DescendantAdded:Connect(function(part)
+        if not LightningHaxAlive then return end
                 SetupCloneRoomPart(part)
             end)
         
             ScannerRoomView.AncestryChanged:Connect(function()
+        if not LightningHaxAlive then return end
                 connection:Disconnect()
             end)
         end
@@ -240,6 +390,7 @@ HomeTab:CreateButton({
         ScannerViewportFrame.ViewSpecial.CurrentCamera = ScannerCamera
         
         Scanner.Activated:Connect(function()
+        if not LightningHaxAlive then return end
             if not (ScannerActivateTickDelay <= tick()) then
                 return
             end
@@ -262,6 +413,8 @@ HomeTab:CreateButton({
         end)
         
         Scanner.Equipped:Connect(function()
+        if not LightningHaxAlive then return end
+            SetTabletESPMode(true)
             for _, anim in pairs(Scanner:WaitForChild("Animations"):GetChildren()) do
                 LoadedAnimations[anim.Name] = player.Character.Humanoid:LoadAnimation(anim)
             end
@@ -339,12 +492,21 @@ HomeTab:CreateButton({
         end)
         
         Scanner.Unequipped:Connect(function()
-            ScannerViewportFrame.Parent = script
+        if not LightningHaxAlive then return end
+            SetTabletESPMode(false)
+            ScannerViewportFrame.Parent = player.PlayerGui
             ScannerViewportFrame.Enabled = false
-        
+            ScannerViewportFrame.Adornee = nil
             Equipped = false
-        
-        
+            IsScannerOpened = false
+            for _, anim in pairs(LoadedAnimations) do
+                pcall(function() anim:Stop(0.1) end)
+            end
+            local character = player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Running) end)
+            end
             for _, v in pairs(Handle:GetChildren()) do
                 if v:IsA("Sound") then
                     v:Stop()
@@ -374,6 +536,7 @@ HomeTab:CreateButton({
             local novaRotacao = Vector3.new(66.559, -72.771, 180)
             
             Torso.ProximityPrompt.Triggered:Connect(function()
+        if not LightningHaxAlive then return end
                 Sound:Play()
                 lid.Position = novaPosicao
                 lid.Orientation = novaRotacao
@@ -390,6 +553,7 @@ HomeTab:CreateButton({
             end)
             
             P2.Triggered:Connect(function()
+        if not LightningHaxAlive then return end
                 giveTablet()
                 model.Tablet:Destroy()
             end)
@@ -429,6 +593,16 @@ local TabletID = math.random(1, 999999999)
 
 function MoveRoomToViewport(Room : Model)
 	local Clone = Room:Clone()
+
+	for _, v in ipairs(Clone:GetDescendants()) do
+		if v:IsA("Highlight")
+			or v:IsA("BoxHandleAdornment")
+			or v:IsA("BillboardGui")
+			or string.find(v.Name, "ESP", 1, true) then
+			v:Destroy()
+		end
+	end
+
 	Clone.Parent = UI.ViewNormal
 	
 	for _,v in pairs(Clone:QueryDescendants("Sound")) do
@@ -446,6 +620,7 @@ function MarkObject(Object, Prompt)
 	
 	if Prompt then
 		local C_; C_ = Prompt.Triggered:Connect(function()
+        if not LightningHaxAlive then return end
 			C_:Disconnect()
 			
 			TweenService:Create(S, TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),{
@@ -460,6 +635,7 @@ function MarkObject(Object, Prompt)
 	
 	local Room = Object:FindFirstAncestorWhichIsA("Model")
 	Room.Destroying:Connect(function()
+        if not LightningHaxAlive then return end
 		S:Destroy()
 	end)
 	
@@ -475,6 +651,7 @@ function MarkObjectWithStar(Object : BasePart)
 	local Index = #Stars + 1
 	
 	Object.Destroying:Connect(function()
+        if not LightningHaxAlive then return end
 		table.remove(Stars, Index)
 		
 		TweenService:Create(NewStar, TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),{
@@ -557,12 +734,10 @@ function Update()
 	local RoomId = Plr:GetAttribute("CurrentRoom")
 	local CurrentRoom = CurrentRooms:FindFirstChild(RoomId)
 	
-	-- Update viewport
 	for _, v in pairs(ItemsToRemove) do
 		v:Destroy()
 	end
 
-	-- Add room(s) to viewport
 	if CurrentRooms:FindFirstChild(RoomId - 1) then
 		MoveRoomToViewport(CurrentRooms[RoomId - 1]) -- Previous room
 	end
@@ -573,7 +748,6 @@ function Update()
 		MoveRoomToViewport(CurrentRooms[RoomId + 1]) -- Next room
 	end
 
-	-- Mark objects in room(s)
 	local ToFind = {
 		"LeverForGate"
 	}
@@ -595,7 +769,6 @@ local OGLight = Scanner.Handle.Screen.SurfaceLight.Brightness
 function On()
 	DisplayStatic()
 	OffS.Visible = false
-	--Scanner.Handle.Idle:Play()
 	
 	TweenService:Create(Scanner.Handle.Screen.SurfaceLight, TweenInfo.new(.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),{
 		Brightness = OGLight
@@ -606,6 +779,7 @@ function On()
 	Update()
 	
 	Connections.CurrentRoomChanged = Plr:GetAttributeChangedSignal("CurrentRoom"):Connect(function()
+        if not LightningHaxAlive then return end
 		if State then
 			DisplayStatic()
 			Update()
@@ -650,6 +824,7 @@ function Off()
 end
 
 function OffUnequip()
+	SetTabletESPMode(false)
 	UI.Enabled = false
 	UI.ViewNormal.CurrentCamera = nil
 	UI.ViewSpecial.CurrentCamera = nil
@@ -658,6 +833,7 @@ function OffUnequip()
 end
 
 function OnEquip()
+	SetTabletESPMode(true)
 	UI.Enabled = true
 	UI.ViewNormal.CurrentCamera = UI.Camera
 	UI.ViewSpecial.CurrentCamera = UI.Camera
@@ -708,7 +884,6 @@ HomeTab:CreateButton({
     Name = "Big Seek [ SEEK ]",
     Callback = function()
 
--- SEEK
 
 function Setup(SeekMoving : Model)
     for _, Color : BasePart in pairs(SeekMoving:GetDescendants()) do
@@ -735,6 +910,7 @@ if SeekMoving then
     Setup(SeekMoving)
 end
 workspace.ChildAdded:Connect(function(Child : Model)
+        if not LightningHaxAlive then return end
     task.wait(3)
     
     if Child.Name == "SeekMoving" or Child.Name == "SeekMovingNewClone" then
@@ -749,7 +925,6 @@ HomeTab:CreateButton({
     Name = "Buff Figure [ FIGURE ]",
     Callback = function()
 
--- FIGURE
 
 function Setup(Child : Folder)
     local Figure = Child:FindFirstChild("FigureSetup")
@@ -776,6 +951,7 @@ function Setup(Child : Folder)
     end
 end
 workspace.CurrentRooms.ChildAdded:Connect(function(Child : Folder)
+        if not LightningHaxAlive then return end
     task.wait(3)
     Setup(Child)
 end)
@@ -790,7 +966,6 @@ HomeTab:CreateButton({
     Name = "Big Seek [ FIGURE ]",
     Callback = function()
 
--- FIGURE
 
 function SetupFigure(Child)
 	local Figure = Child:FindFirstChild("FigureSetup")
@@ -815,6 +990,7 @@ function SetupFigure(Child)
 end
 
 workspace.CurrentRooms.ChildAdded:Connect(function(Child)
+        if not LightningHaxAlive then return end
 	task.wait(3)
 	SetupFigure(Child)
 end)
@@ -825,36 +1001,459 @@ end
     end,
 })
 
----------------------------------------------------
--- EXPLOITS SECTION
----------------------------------------------------
 
-ExploitsTab:CreateButton({
-    Name = "Break Doors",
-    Callback = function()
-for _, v in pairs(workspace:GetDescendants()) do
-	if v.Name == "Door" then
-		pcall(function()
-			v:Destroy()
-		end)
-	end
+local RestoreDoorCollision
+local VerifyDoorLock
+local DoorCollisionBackup
+
+local BreakDoorsEnabled=false
+local BreakDoorStates={}
+local BreakDoorsConnection=nil
+local BreakDoorsDescendantConnection=nil
+local BREAK_DOOR_OFFSET=Vector3.new(0,-5000,0)
+
+local function IsNumberedRoomDoorContainer(inst)
+    if not inst or inst.Name~="Door" then return false end
+    local room=inst.Parent
+    return room and room.Parent==workspace.CurrentRooms and tonumber(room.Name)~=nil
 end
 
+local function GetDoorContainerFromDescendant(obj)
+    local current=obj
+    while current and current~=workspace.CurrentRooms do
+        if IsNumberedRoomDoorContainer(current) then return current end
+        current=current.Parent
+    end
+end
+
+local function BreakDoorPart(container,obj)
+    if not obj:IsA("BasePart") then return end
+    local state=BreakDoorStates[container]
+    if not state then return end
+
+    if not state.Parts[obj] then
+        state.Parts[obj]={
+            CanCollide=obj.CanCollide,
+            CanTouch=obj.CanTouch,
+            CanQuery=obj.CanQuery,
+        }
+    end
+
+    -- Relative movement is deliberate: never restore a stale pre-animation CFrame.
+    obj.CFrame=obj.CFrame + BREAK_DOOR_OFFSET
+    obj.CanCollide=false
+    obj.CanTouch=false
+    obj.CanQuery=false
+end
+
+local function SetDoorBrokenState(container,broken)
+    if not IsNumberedRoomDoorContainer(container) then return end
+
+    if broken then
+        if BreakDoorStates[container] then return end
+
+        BreakDoorStates[container]={Parts={}}
+        container:SetAttribute("LightningBreakDoorsActive",true)
+
+        for _,obj in ipairs(container:GetDescendants()) do
+            BreakDoorPart(container,obj)
+        end
+    else
+        local state=BreakDoorStates[container]
+        if not state then return end
+
+        if container and container.Parent then
+            -- Undo only our relative offset. This preserves whatever CFrame the
+            -- game's own open/close animation gave each piece while Break Doors ran.
+            for part,data in pairs(state.Parts) do
+                if part and part.Parent then
+                    part.CFrame=part.CFrame - BREAK_DOOR_OFFSET
+                    part.CanCollide=data.CanCollide
+                    part.CanTouch=data.CanTouch
+                    part.CanQuery=data.CanQuery
+                end
+            end
+
+            container:SetAttribute("LightningBreakDoorsActive",nil)
+            local room=container.Parent
+            if room and room.Parent==workspace.CurrentRooms then
+                DoorCollisionBackup[room]=nil
+                task.defer(function()
+                    game:GetService("RunService").Heartbeat:Wait()
+                    if LightningHaxAlive and room and room.Parent then
+                        VerifyDoorLock(room)
+                    end
+                end)
+            end
+        end
+
+        BreakDoorStates[container]=nil
+    end
+end
+
+local function SetBreakDoors(enabled)
+    BreakDoorsEnabled=enabled
+
+    if BreakDoorsConnection then
+        BreakDoorsConnection:Disconnect()
+        BreakDoorsConnection=nil
+    end
+    if BreakDoorsDescendantConnection then
+        BreakDoorsDescendantConnection:Disconnect()
+        BreakDoorsDescendantConnection=nil
+    end
+
+    if enabled then
+        for _,room in ipairs(workspace.CurrentRooms:GetChildren()) do
+            if tonumber(room.Name)~=nil then
+                local door=room:FindFirstChild("Door")
+                if door then SetDoorBrokenState(door,true) end
+            end
+        end
+
+        BreakDoorsConnection=workspace.CurrentRooms.ChildAdded:Connect(function(room)
+            if not LightningHaxAlive or not BreakDoorsEnabled then return end
+            task.defer(function()
+                local door=room:WaitForChild("Door",3)
+                if door and BreakDoorsEnabled then SetDoorBrokenState(door,true) end
+            end)
+        end)
+
+        -- Parts that stream/create after activation get the same relative offset.
+        BreakDoorsDescendantConnection=workspace.CurrentRooms.DescendantAdded:Connect(function(obj)
+            if not LightningHaxAlive or not BreakDoorsEnabled or not obj:IsA("BasePart") then return end
+            local container=GetDoorContainerFromDescendant(obj)
+            if container and BreakDoorStates[container] then
+                task.defer(BreakDoorPart,container,obj)
+            end
+        end)
+    else
+        local restore={}
+        for container in pairs(BreakDoorStates) do table.insert(restore,container) end
+        for _,container in ipairs(restore) do SetDoorBrokenState(container,false) end
+    end
+end
+
+local EntityGodModeEnabled=false
+local EntityGodTracked={}
+local EntityGodConnections={}
+local EntityGodCollisionStates={}
+local EntityGodOriginalHipHeight=nil
+local EntityGodNoclipConnection=nil
+local EntityGodWallConnection=nil
+local ENTITY_GOD_HIP_HEIGHT=0.1
+local RunService=game:GetService("RunService")
+
+local EntityGodNames={
+    RushMoving=true,
+    AmbushMoving=true,
+    BackdoorRush=true,
+    BlitzMoving=true,
+    Blitz=true,
+}
+
+local function GetEntityGodCharacter()
+    return LocalPlayer.Character
+end
+
+local function GetEntityGodHumanoid()
+    local character=GetEntityGodCharacter()
+    return character and character:FindFirstChildOfClass("Humanoid") or nil
+end
+
+local function EntityGodActiveCount()
+    local count=0
+    for entity in pairs(EntityGodTracked) do
+        if entity and entity.Parent and entity:IsDescendantOf(workspace) then count+=1 end
+    end
+    return count
+end
+
+local function ApplyNormalNoclip()
+    local character=GetEntityGodCharacter()
+    if not character then return end
+    for _,part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if EntityGodCollisionStates[part]==nil then
+                EntityGodCollisionStates[part]=part.CanCollide
+            end
+            part.CanCollide=false
+        end
+    end
+end
+
+local function RestoreNormalNoclip()
+    for part,oldValue in pairs(EntityGodCollisionStates) do
+        if part and part.Parent then
+            pcall(function() part.CanCollide=oldValue end)
+        end
+    end
+    table.clear(EntityGodCollisionStates)
+end
+
+local function StopEntityGodRuntime()
+    if EntityGodNoclipConnection then
+        EntityGodNoclipConnection:Disconnect()
+        EntityGodNoclipConnection=nil
+    end
+    if EntityGodWallConnection then
+        EntityGodWallConnection:Disconnect()
+        EntityGodWallConnection=nil
+    end
+end
+
+local function RestoreEntityGodMode()
+    StopEntityGodRuntime()
+    local humanoid=GetEntityGodHumanoid()
+    if humanoid and EntityGodOriginalHipHeight~=nil then
+        humanoid.HipHeight=EntityGodOriginalHipHeight
+    end
+    RestoreNormalNoclip()
+    EntityGodOriginalHipHeight=nil
+end
+
+local function StartWallGuard()
+    if EntityGodWallConnection then return end
+
+    local lastSafePosition=nil
+    EntityGodWallConnection=RunService.Heartbeat:Connect(function()
+        if not LightningHaxAlive then return end
+        if not EntityGodModeEnabled or EntityGodActiveCount()==0 then return end
+
+        local character=GetEntityGodCharacter()
+        local root=character and character:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        if not lastSafePosition then
+            lastSafePosition=root.Position
+            return
+        end
+
+        local delta=root.Position-lastSafePosition
+        local horizontal=Vector3.new(delta.X,0,delta.Z)
+
+        if horizontal.Magnitude>0.001 then
+            local params=RaycastParams.new()
+            params.FilterType=Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances={character}
+            params.IgnoreWater=true
+
+            local origin=Vector3.new(lastSafePosition.X,root.Position.Y,lastSafePosition.Z)
+            local hit=workspace:Raycast(origin,horizontal.Unit*(horizontal.Magnitude+1.25),params)
+
+            if hit and math.abs(hit.Normal.Y)<0.55 then
+                local p=root.Position
+                root.CFrame=CFrame.new(lastSafePosition.X,p.Y,lastSafePosition.Z)*(root.CFrame-root.CFrame.Position)
+                root.AssemblyLinearVelocity=Vector3.new(0,root.AssemblyLinearVelocity.Y,0)
+                return
+            end
+        end
+
+        lastSafePosition=root.Position
+    end)
+end
+
+local function ApplyEntityGodMode()
+    if not EntityGodModeEnabled or EntityGodActiveCount()==0 then
+        RestoreEntityGodMode()
+        return
+    end
+
+    local humanoid=GetEntityGodHumanoid()
+    if not humanoid then return end
+
+    if EntityGodOriginalHipHeight==nil then
+        EntityGodOriginalHipHeight=humanoid.HipHeight
+    end
+
+    humanoid.HipHeight=ENTITY_GOD_HIP_HEIGHT
+    ApplyNormalNoclip()
+
+    if not EntityGodNoclipConnection then
+        EntityGodNoclipConnection=RunService.Stepped:Connect(function()
+        if not LightningHaxAlive then return end
+            if EntityGodModeEnabled and EntityGodActiveCount()>0 then
+                local currentHumanoid=GetEntityGodHumanoid()
+                if currentHumanoid then currentHumanoid.HipHeight=ENTITY_GOD_HIP_HEIGHT end
+                ApplyNormalNoclip()
+            end
+        end)
+    end
+
+    StartWallGuard()
+end
+
+local function UntrackEntityGod(entity)
+    EntityGodTracked[entity]=nil
+    if EntityGodActiveCount()==0 then RestoreEntityGodMode() end
+end
+
+local function TrackEntityGod(entity)
+    if not EntityGodModeEnabled or not entity or not entity.Parent or not EntityGodNames[entity.Name] then return end
+    if EntityGodTracked[entity] then return end
+
+    EntityGodTracked[entity]=true
+    ApplyEntityGodMode()
+
+    local connection
+    connection=entity.AncestryChanged:Connect(function()
+        if not LightningHaxAlive then return end
+        if not entity.Parent or not entity:IsDescendantOf(workspace) then
+            if connection then connection:Disconnect() end
+            UntrackEntityGod(entity)
+        end
+    end)
+    table.insert(EntityGodConnections,connection)
+end
+
+local function ScanEntityGodMode()
+    for _,entity in ipairs(workspace:GetChildren()) do
+        if EntityGodNames[entity.Name] then TrackEntityGod(entity) end
+    end
+end
+
+local function StopEntityGodWatchers()
+    for _,connection in ipairs(EntityGodConnections) do
+        pcall(function() connection:Disconnect() end)
+    end
+    table.clear(EntityGodConnections)
+    table.clear(EntityGodTracked)
+    RestoreEntityGodMode()
+end
+
+ExploitsTab:CreateToggle({
+    Name="Entity God Mode (Rush / Ambush / Blitz)",
+    CurrentValue=false,
+    Flag="EntityGodMode",
+    Callback=function(value)
+        EntityGodModeEnabled=value
+        if value then
+            ScanEntityGodMode()
+            table.insert(EntityGodConnections,workspace.ChildAdded:Connect(function(entity)
+        if not LightningHaxAlive then return end
+                if EntityGodNames[entity.Name] then task.defer(TrackEntityGod,entity) end
+            end))
+        else
+            StopEntityGodWatchers()
+        end
     end,
 })
 
-ExploitsTab:CreateButton({
-    Name = "Break Elevators",
-    Callback = function()
-for _, v in pairs(workspace:GetDescendants()) do
-	if string.lower(v.Name):find("elevator") then
-		pcall(function()
-			v:Destroy()
-		end)
-	end
+LocalPlayer.CharacterAdded:Connect(function()
+        if not LightningHaxAlive then return end
+    StopEntityGodRuntime()
+    table.clear(EntityGodCollisionStates)
+    EntityGodOriginalHipHeight=nil
+    if EntityGodModeEnabled then
+        task.defer(function()
+            task.wait(0.25)
+            ScanEntityGodMode()
+            if EntityGodActiveCount()>0 then ApplyEntityGodMode() end
+        end)
+    end
+end)
+
+ExploitsTab:CreateToggle({
+    Name = "Break Doors",
+    CurrentValue = false,
+    Flag = "BreakDoors",
+    Callback = SetBreakDoors,
+})
+
+local BreakElevatorsEnabled=false
+local BreakElevatorStates={}
+local BreakElevatorsConnection=nil
+
+local function IsElevatorRoot(inst)
+    if not inst or not inst.Parent then return false end
+    if not string.find(string.lower(inst.Name),"elevator",1,true) then return false end
+    local parentName=string.lower(inst.Parent.Name)
+    return not string.find(parentName,"elevator",1,true)
 end
 
-    end,
+local function ApplyElevatorBreakPart(state,obj)
+    if not obj:IsA("BasePart") then return end
+    if state[obj]==nil then
+        state[obj]={
+            CanCollide=obj.CanCollide,
+            CanTouch=obj.CanTouch,
+            CanQuery=obj.CanQuery,
+            LocalTransparencyModifier=obj.LocalTransparencyModifier
+        }
+    end
+    obj.CanCollide=false
+    obj.CanTouch=false
+    obj.CanQuery=false
+    obj.LocalTransparencyModifier=1
+end
+
+local function SetElevatorBrokenState(inst,broken)
+    if not inst then return end
+
+    if broken then
+        if not IsElevatorRoot(inst) then return end
+        local state=BreakElevatorStates[inst]
+        if not state then
+            state={}
+            BreakElevatorStates[inst]=state
+        end
+        if inst:IsA("BasePart") then ApplyElevatorBreakPart(state,inst) end
+        for _,obj in ipairs(inst:GetDescendants()) do
+            ApplyElevatorBreakPart(state,obj)
+        end
+    else
+        local state=BreakElevatorStates[inst]
+        if not state then return end
+        for obj,data in pairs(state) do
+            if obj and obj.Parent then
+                obj.CanCollide=data.CanCollide
+                obj.CanTouch=data.CanTouch
+                obj.CanQuery=data.CanQuery
+                obj.LocalTransparencyModifier=data.LocalTransparencyModifier
+            end
+        end
+        BreakElevatorStates[inst]=nil
+    end
+end
+
+local function SetBreakElevators(enabled)
+    BreakElevatorsEnabled=enabled
+
+    if BreakElevatorsConnection then
+        BreakElevatorsConnection:Disconnect()
+        BreakElevatorsConnection=nil
+    end
+
+    if enabled then
+        for _,inst in ipairs(workspace:GetDescendants()) do
+            if IsElevatorRoot(inst) then
+                SetElevatorBrokenState(inst,true)
+            end
+        end
+
+        BreakElevatorsConnection=workspace.DescendantAdded:Connect(function(inst)
+            if not LightningHaxAlive or not BreakElevatorsEnabled then return end
+            local current=inst
+            while current and current~=workspace do
+                if IsElevatorRoot(current) then
+                    task.defer(SetElevatorBrokenState,current,true)
+                    break
+                end
+                current=current.Parent
+            end
+        end)
+    else
+        local restore={}
+        for inst in pairs(BreakElevatorStates) do table.insert(restore,inst) end
+        for _,inst in ipairs(restore) do SetElevatorBrokenState(inst,false) end
+    end
+end
+
+ExploitsTab:CreateToggle({
+    Name = "Break Elevators",
+    CurrentValue = false,
+    Flag = "BreakElevators",
+    Callback = SetBreakElevators,
 })
 
 local BypassSeek = false
@@ -956,6 +1555,7 @@ ExploitsTab:CreateToggle({
             end
 
             PadlockConnection = LocalPlayer.Character.ChildAdded:Connect(function(Check)
+        if not LightningHaxAlive then return end
 
                 if Check:IsA("Tool") and Check.Name == "LibraryHintPaper" then
 
@@ -988,23 +1588,209 @@ ExploitsTab:CreateToggle({
     end
 })
 
+local DisableRansomEnabled = false
+local RansomHookInstalled = false
+local RansomOldNamecall
+
+local RansomModuleHookInstalled = false
+local RansomOriginalEntry
+
+local function FindRansomInfect()
+    local player = game:GetService("Players").LocalPlayer
+    local mainUI = player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild("MainUI")
+    if mainUI then
+        local found = mainUI:FindFirstChild("RansomInfect", true)
+        if found and found:IsA("ModuleScript") then
+            return found
+        end
+    end
+
+    for _,root in ipairs({
+        game:GetService("ReplicatedStorage"),
+        player:FindFirstChild("PlayerGui")
+    }) do
+        if root then
+            local found = root:FindFirstChild("RansomInfect", true)
+            if found and found:IsA("ModuleScript") then
+                return found
+            end
+        end
+    end
+end
+
+local function InstallRansomModuleHook()
+    if RansomModuleHookInstalled then return true end
+    if not hookfunction then return false end
+
+    local module = FindRansomInfect()
+    if not module then return false end
+
+    local ok, entry = pcall(require, module)
+    if not ok or type(entry) ~= "function" then return false end
+
+    RansomOriginalEntry = entry
+    local original
+    original = hookfunction(entry, function(p77, p78, p79, p80)
+        if LightningHaxAlive and DisableRansomEnabled then
+            if p79 == nil and p80 == nil and p78 then
+                local remote = p78:FindFirstChild("RansomAttack")
+                if remote and remote:IsA("RemoteEvent") then
+                    pcall(function()
+                        remote:FireServer("didnt")
+                    end)
+                end
+            end
+            return
+        end
+
+        return original(p77, p78, p79, p80)
+    end)
+
+    RansomModuleHookInstalled = true
+    return true
+end
+
+local function InstallRansomHook()
+    if RansomHookInstalled then return true end
+    if not hookmetamethod or not getnamecallmethod or not newcclosure then return false end
+
+    local old
+    old = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        local args = {...}
+        local method = getnamecallmethod()
+
+        if LightningHaxAlive
+            and DisableRansomEnabled
+            and method == "FireServer"
+            and typeof(self) == "Instance"
+            and self.Name == "RansomAttack"
+            and args[1] == "moved" then
+
+            args[1] = "didnt"
+            return old(self, unpack(args))
+        end
+
+        return old(self, ...)
+    end))
+
+    RansomOldNamecall = old
+    RansomHookInstalled = true
+    return true
+end
+
 ExploitsTab:CreateToggle({
-    Name = "Disable A-90",
+    Name = "Disable Ransom",
     CurrentValue = false,
-    Flag = "DisableA90",
+    Flag = "DisableRansom",
     Callback = function(Value)
+        DisableRansomEnabled = Value
 
-        local Modules = game.Players.LocalPlayer.PlayerGui.MainUI
-            .Initiator.Main_Game.RemoteListener.Modules
+        if Value then
+            -- This is the previously confirmed working proc-block path.
+            pcall(InstallRansomModuleHook)
+            pcall(InstallRansomHook)
+        end
+    end
+})
 
-        local A90 =
-            Modules:FindFirstChild("A90")
-            or Modules:FindFirstChild("_A90")
-            or Modules:FindFirstChild("A90_Disabled")
+ExploitsTab:CreateToggle({
+    Name = "Disable Eyes",
+    CurrentValue = false,
+    Flag = "DisableEyes",
+    Callback = function(Value)
+        DisableEyesEnabled=Value
+    end
+})
 
-        if not A90 then return end
+local DisableDupeEnabled=false
+local DisableDupeConnection=nil
+local DupeTouchBackup=setmetatable({}, {__mode="k"})
 
-        A90.Name = Value and "A90_Disabled" or "A90"
+local function IsDupeContainer(obj)
+    if not obj then return false end
+    if obj.Name=="SideroomDupe" then return true end
+
+    local p=obj.Parent
+    while p and p~=workspace.CurrentRooms do
+        if p.Name=="SideroomDupe" then return true end
+        p=p.Parent
+    end
+
+    return false
+end
+
+local function DisableDupeTrigger(obj)
+    if not DisableDupeEnabled or not obj or not obj.Parent then return end
+    if obj.Name~="DoorFake" or not IsDupeContainer(obj) then return end
+
+    if obj:IsA("BasePart") then
+        if DupeTouchBackup[obj]==nil then
+            DupeTouchBackup[obj]=obj.CanTouch
+        end
+        obj.CanTouch=false
+        return
+    end
+
+    -- Some room variants wrap DoorFake in a Model/Folder.
+    for _,part in ipairs(obj:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if DupeTouchBackup[part]==nil then
+                DupeTouchBackup[part]=part.CanTouch
+            end
+            part.CanTouch=false
+        end
+    end
+end
+
+local function ScanDupeTriggers()
+    for _,room in ipairs(workspace.CurrentRooms:GetChildren()) do
+        for _,obj in ipairs(room:GetDescendants()) do
+            if obj.Name=="DoorFake" then
+                DisableDupeTrigger(obj)
+            end
+        end
+    end
+end
+
+local function SetDupeDisabled(enabled)
+    DisableDupeEnabled=enabled
+
+    if DisableDupeConnection then
+        DisableDupeConnection:Disconnect()
+        DisableDupeConnection=nil
+    end
+
+    if not enabled then
+        for part,originalCanTouch in pairs(DupeTouchBackup) do
+            if part and part.Parent then
+                part.CanTouch=originalCanTouch
+            end
+            DupeTouchBackup[part]=nil
+        end
+        return
+    end
+
+    ScanDupeTriggers()
+
+    DisableDupeConnection=workspace.CurrentRooms.DescendantAdded:Connect(function(obj)
+        if not LightningHaxAlive or not DisableDupeEnabled then return end
+        if obj.Name=="DoorFake" then
+            task.defer(DisableDupeTrigger,obj)
+        elseif obj:IsA("BasePart") and obj:FindFirstAncestor("SideroomDupe") then
+            local fake=obj:FindFirstAncestor("DoorFake")
+            if fake then
+                task.defer(DisableDupeTrigger,fake)
+            end
+        end
+    end)
+end
+
+ExploitsTab:CreateToggle({
+    Name = "Disable Dupe",
+    CurrentValue = false,
+    Flag = "DisableDupe",
+    Callback = function(Value)
+        SetDupeDisabled(Value)
     end
 })
 
@@ -1086,6 +1872,7 @@ ExploitsTab:CreateToggle({
         UpdateAllSnares(false)
 
         AntiSnareConnection = workspace.DescendantAdded:Connect(function(Object)
+        if not LightningHaxAlive then return end
 
             if Object.Name == "Snares" then
                 for _, Snare in ipairs(Object:GetChildren()) do
@@ -1115,23 +1902,43 @@ ExploitsTab:CreateToggle({
     end
 })
 
+local ScreechBackup = {}
+
+local function SetScreechDisabled(disabled)
+    local rs = game:GetService("ReplicatedStorage")
+    local targets = {
+        {rs:FindFirstChild("RemotesFolder"), "Screech"},
+        {rs:FindFirstChild("Entities"), "ScreechRetro"},
+        {rs:FindFirstChild("Entities"), "Screech"},
+    }
+
+    if disabled then
+        for _, entry in ipairs(targets) do
+            local parent, name = entry[1], entry[2]
+            local obj = parent and parent:FindFirstChild(name)
+            if obj then
+                local key = parent.Name .. "/" .. name
+                if not ScreechBackup[key] then
+                    ScreechBackup[key] = {clone = obj:Clone(), parent = parent, name = name}
+                end
+                obj:Destroy()
+            end
+        end
+    else
+        for _, data in pairs(ScreechBackup) do
+            if data.parent and data.parent.Parent and not data.parent:FindFirstChild(data.name) then
+                data.clone:Clone().Parent = data.parent
+            end
+        end
+    end
+end
+
 ExploitsTab:CreateToggle({
     Name = "Disable Screech",
     CurrentValue = false,
     Flag = "DisableScreech",
     Callback = function(Value)
-
-        local Modules = game.Players.LocalPlayer.PlayerGui.MainUI
-            .Initiator.Main_Game.RemoteListener.Modules
-
-        local Screech =
-            Modules:FindFirstChild("Screech")
-            or Modules:FindFirstChild("_Screech")
-            or Modules:FindFirstChild("Screech_Disabled")
-
-        if not Screech then return end
-
-        Screech.Name = Value and "Screech_Disabled" or "Screech"
+        SetScreechDisabled(Value)
     end
 })
 
@@ -1182,6 +1989,7 @@ ExploitsTab:CreateToggle({
         end
 
         AntiFHConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not LightningHaxAlive then return end
             if RemotesFolder:FindFirstChild("Crouch") then
                 RemotesFolder.Crouch:FireServer(true)
             end
@@ -1233,6 +2041,7 @@ ExploitsTab:CreateToggle({
         end
 
         AntiJeffConnection = workspace.ChildAdded:Connect(function(Object)
+        if not LightningHaxAlive then return end
             if Object.Name == "JeffTheKiller" then
                 KillJeff(Object)
             end
@@ -1241,12 +2050,94 @@ ExploitsTab:CreateToggle({
     end
 })
 
----------------------------------------------------
--- CHAMS SECTION
----------------------------------------------------
+
+local Lighting=game:GetService("Lighting")
+local FullbrightNoFogEnabled=false
+local LightingBackup=nil
+local LightingConnection=nil
+
+local function ApplyFullbrightNoFog()
+    if not FullbrightNoFogEnabled then return end
+    Lighting.Brightness=2
+    Lighting.ClockTime=14
+    Lighting.FogStart=0
+    Lighting.FogEnd=1000000
+    Lighting.GlobalShadows=false
+    Lighting.Ambient=Color3.fromRGB(255,255,255)
+    Lighting.OutdoorAmbient=Color3.fromRGB(255,255,255)
+    for _,effect in ipairs(Lighting:GetChildren()) do
+        if effect:IsA("Atmosphere") then
+            effect.Density=0
+            effect.Haze=0
+            effect.Glare=0
+        end
+    end
+end
+
+ChamsTab:CreateToggle({
+    Name="Fullbright + No Fog",
+    CurrentValue=false,
+    Flag="FullbrightNoFog",
+    Callback=function(v)
+        FullbrightNoFogEnabled=v
+        if LightingConnection then LightingConnection:Disconnect(); LightingConnection=nil end
+
+        if v then
+            LightingBackup={
+                Brightness=Lighting.Brightness,
+                ClockTime=Lighting.ClockTime,
+                FogStart=Lighting.FogStart,
+                FogEnd=Lighting.FogEnd,
+                GlobalShadows=Lighting.GlobalShadows,
+                Ambient=Lighting.Ambient,
+                OutdoorAmbient=Lighting.OutdoorAmbient,
+                Atmospheres={}
+            }
+            for _,effect in ipairs(Lighting:GetChildren()) do
+                if effect:IsA("Atmosphere") then
+                    LightingBackup.Atmospheres[effect]={
+                        Density=effect.Density,
+                        Haze=effect.Haze,
+                        Glare=effect.Glare
+                    }
+                end
+            end
+            ApplyFullbrightNoFog()
+            LightingConnection=Lighting.Changed:Connect(function()
+        if not LightningHaxAlive then return end
+                task.defer(ApplyFullbrightNoFog)
+            end)
+        elseif LightingBackup then
+            Lighting.Brightness=LightingBackup.Brightness
+            Lighting.ClockTime=LightingBackup.ClockTime
+            Lighting.FogStart=LightingBackup.FogStart
+            Lighting.FogEnd=LightingBackup.FogEnd
+            Lighting.GlobalShadows=LightingBackup.GlobalShadows
+            Lighting.Ambient=LightingBackup.Ambient
+            Lighting.OutdoorAmbient=LightingBackup.OutdoorAmbient
+            for effect,values in pairs(LightingBackup.Atmospheres) do
+                if effect and effect.Parent then
+                    effect.Density=values.Density
+                    effect.Haze=values.Haze
+                    effect.Glare=values.Glare
+                end
+            end
+            LightingBackup=nil
+        end
+    end
+})
 
 local FOVConnection
 local CurrentFOV = 70
+
+task.defer(function()
+    task.wait(0.5)
+    for _,gui in ipairs(game:GetService("CoreGui"):GetDescendants()) do
+        if gui:IsA("ScrollingFrame") then
+            gui.ClipsDescendants = true
+        end
+    end
+end)
 
 ChamsTab:CreateSlider({
     Name = "Field Of View",
@@ -1284,8 +2175,10 @@ ChamsTab:CreateSlider({
         Tween:Play()
 
         Tween.Completed:Connect(function()
+        if not LightningHaxAlive then return end
 
             FOVConnection = game:GetService("RunService").RenderStepped:Connect(function()
+        if not LightningHaxAlive then return end
 
                 local Cam = workspace.CurrentCamera
 
@@ -1300,571 +2193,1072 @@ ChamsTab:CreateSlider({
     end
 })
 
-local ChestESPEnabled = false
-local ChestESPConnection = nil
+local ESP_RED = Color3.fromRGB(255, 45, 45)
+local ESP_YELLOW = Color3.fromRGB(255, 230, 0)
+local ESP_GREEN = Color3.fromRGB(0, 250, 10)
 
-local ChestNames = {
-    "Toolshed_Small",
-    "Chest_Vine",
-    "ChestBox",
-    "ChestBoxLocked",
-    "MouseHole",
-    "Locker_Small_Locked",
-    "Toolbox_Locked",
-    "Toolbox"
-}
+local LatestRoomValue = game:GetService("ReplicatedStorage"):WaitForChild("GameData"):WaitForChild("LatestRoom")
 
-local function createChestESP(obj)
-    if not obj then return end
-    if obj:FindFirstChild("ChestESPHighlight") then return end
-    local h = Instance.new("Highlight")
-    h.Name = "ChestESPHighlight"
-    h.Adornee = obj
-    h.FillColor = Color3.fromRGB(255, 255, 0) -- YELLOW
-    h.OutlineColor = Color3.fromRGB(255, 255, 0)
-    h.FillTransparency = 0.5
-    h.OutlineTransparency = 0
-    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    h.Parent = obj
-
-    local box = Instance.new("BoxHandleAdornment")
-    box.Name = "ChestESPBox"
-    box.Adornee = obj
-    box.AlwaysOnTop = true
-    box.ZIndex = 5
-    box.Size = obj:IsA("Model") and obj:GetExtentsSize() or Vector3.new(4,4,4)
-    box.Color3 = Color3.fromRGB(255, 255, 0) -- YELLOW
-    box.Transparency = 0.75
-    box.Parent = obj
-end
-local function removeChestESP()
-    for _, v in ipairs(workspace:GetDescendants()) do
-        local h = v:FindFirstChild("ChestESPHighlight")
-        if h then h:Destroy() end
-
-        local b = v:FindFirstChild("ChestESPBox")
-        if b then b:Destroy() end
+local function GetTopRoom(obj)
+    if not obj then return nil end
+    local room=obj
+    while room and room.Parent~=workspace.CurrentRooms do
+        room=room.Parent
     end
+    return room and room.Parent==workspace.CurrentRooms and room or nil
 end
 
-local function scanChests()
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if table.find(ChestNames, obj.Name) then
-            createChestESP(obj)
-        end
-    end
+local function GetCurrentRoomNumber()
+    local current=tonumber(LocalPlayer:GetAttribute("CurrentRoom"))
+    if current~=nil then return current end
+    return tonumber(LatestRoomValue.Value)
 end
 
-ChamsTab:CreateToggle({
-    Name = "ESP Chests",
-    CurrentValue = false,
-    Flag = "ChestESP",
-
-    Callback = function(Value)
-        ChestESPEnabled = Value
-
-        if Value then
-            scanChests()
-
-            ChestESPConnection = workspace.DescendantAdded:Connect(function(obj)
-                if not ChestESPEnabled then return end
-
-                if table.find(ChestNames, obj.Name) then
-                    task.wait()
-                    createChestESP(obj)
-                end
-            end)
-        else
-            if ChestESPConnection then
-                ChestESPConnection:Disconnect()
-                ChestESPConnection = nil
-            end
-
-            removeChestESP()
-        end
-    end,
-})
-
-local ItemESPEnabled = false
-local ItemESPConnection = nil
-
-local ItemNames = {
-    "Lighter","Flashlight","Lockpick","Vitamins","Bandage",
-    "StarVial","StarBottle","StarJug","Shakelight","Straplight",
-    "Bulklight","Battery","Candle","Crucifix","CrucifixWall",
-    "Glowsticks","SkeletonKey","Candy","ShieldMini","ShieldBig",
-    "BandagePack","BatteryPack","RiftCandle","LaserPointer",
-    "HolyGrenade","Shears","Smoothie","Cheese","Bread",
-    "AlarmClock","RiftSmoothie","GweenSoda","GlitchCube",
-    "Scanner","Bomb","Knockbomb","Nanner","BigBomb",
-    "SnakeBox","GoldGun","StopSign","TipJar","Lantern",
-    "IronKey","LotusPetal","Compass","LotusPetalPickup",
-    "LanternLitItem","KeyIron","IronKeyForCrypt","LotusHolder",
-    "Multitool","RiftJar","AloeVera","Donut","Lotus",
-    "BoxingGloves","Green_Herb"
-}
-
-local function createESP(obj)
-    if not obj then return end
-    if obj:FindFirstChild("ItemESPHighlight") then return end
-
-    -- Highlight (YELLOW)
-    local h = Instance.new("Highlight")
-    h.Name = "ItemESPHighlight"
-    h.Adornee = obj
-    h.FillColor = Color3.fromRGB(255, 255, 0)
-    h.OutlineColor = Color3.fromRGB(255, 255, 0)
-    h.FillTransparency = 0.5
-    h.OutlineTransparency = 0
-    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    h.Parent = obj
-
-    -- Box ESP (optional, same yellow)
-    local box = Instance.new("BoxHandleAdornment")
-    box.Name = "ItemESPBox"
-    box.Adornee = obj
-    box.AlwaysOnTop = true
-    box.ZIndex = 5
-    box.Size = obj:IsA("Model") and obj:GetExtentsSize() or Vector3.new(4,4,4)
-    box.Color3 = Color3.fromRGB(255, 255, 0)
-    box.Transparency = 0.75
-    box.Parent = obj
+local function IsRoomInESPRange(room)
+    if not room or room.Parent~=workspace.CurrentRooms then return false end
+    local n=tonumber(room.Name)
+    local current=GetCurrentRoomNumber()
+    return n~=nil and current~=nil and (n==current or n==current+1)
 end
 
-local function removeESP()
-    for _, v in ipairs(workspace:GetDescendants()) do
-        local h = v:FindFirstChild("ItemESPHighlight")
-        if h then h:Destroy() end
-
-        local b = v:FindFirstChild("ItemESPBox")
-        if b then b:Destroy() end
-    end
+local function IsObjectInESPRange(obj)
+    return IsRoomInESPRange(GetTopRoom(obj))
 end
 
-local function scan()
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if table.find(ItemNames, obj.Name) then
-            createESP(obj)
-        end
-    end
-end
+local function AddHighlight(target, name, color, fillTransparency)
+    if not target or not target.Parent then return end
 
-ChamsTab:CreateToggle({
-    Name = "ESP Items",
-    CurrentValue = false,
-    Flag = "ItemESP",
-
-    Callback = function(Value)
-        ItemESPEnabled = Value
-
-        if Value then
-            scan()
-
-            ItemESPConnection = workspace.DescendantAdded:Connect(function(obj)
-                if not ItemESPEnabled then return end
-                if table.find(ItemNames, obj.Name) then
-                    task.wait()
-                    createESP(obj)
-                end
-            end)
-        else
-            if ItemESPConnection then
-                ItemESPConnection:Disconnect()
-                ItemESPConnection = nil
-            end
-
-            removeESP()
-        end
-    end,
-})
-
-local ObjectiveESPEnabled = false
-local ObjectiveConnection = nil
-
-local Objectives = {
-    "LeverForGate",
-    "LiveBreakerPolePickup",
-    "LiveHintBook",
-    "FuseObtain",
-    "MinesAnchor",
-    "WaterPump",
-    "TimerLever",
-    "RoomEntrance"
-}
-
-local function createObjectiveESP(obj)
-    if not obj or obj:FindFirstChild("ObjectiveESPHighlight") then
-        return
+    local existing = target:FindFirstChild(name)
+    if existing then
+        existing:Destroy()
     end
 
-    local h = Instance.new("Highlight")
-    h.Name = "ObjectiveESPHighlight"
-    h.FillColor = Color3.fromRGB(0, 250, 10)
-    h.OutlineColor = Color3.fromRGB(0, 250, 10)
-    h.FillTransparency = 0.6
-    h.OutlineTransparency = 0
-    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    h.Adornee = obj
-    h.Parent = obj
+    local adornee
+    local boxSize
+    local boxCFrame
 
-    local box = Instance.new("BoxHandleAdornment")
-    box.Name = "ObjectiveESPBox"
-    box.Adornee = obj
-    box.AlwaysOnTop = true
-    box.ZIndex = 5
-    box.Color3 = Color3.fromRGB(0, 250, 10)
-    box.Transparency = 0.75
+    if target:IsA("BasePart") then
+        adornee = target
+        boxSize = target.Size
+        boxCFrame = CFrame.identity
 
-    if obj:IsA("Model") then
-        box.Size = obj:GetExtentsSize()
-    elseif obj:IsA("BasePart") then
-        box.Size = obj.Size
-    else
-        box.Size = Vector3.new(4,4,4)
-    end
-
-    box.Parent = obj
-end
-
-local function createKeyESP(hitbox)
-    if not hitbox or hitbox:FindFirstChild("KeyESPHighlight") then
-        return
-    end
-
-    local h = Instance.new("Highlight")
-    h.Name = "KeyESPHighlight"
-    h.FillColor = Color3.fromRGB(255,255,0)
-    h.OutlineColor = Color3.fromRGB(255,255,0)
-    h.FillTransparency = 0.5
-    h.OutlineTransparency = 0
-    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    h.Adornee = hitbox
-    h.Parent = hitbox
-
-    local box = Instance.new("BoxHandleAdornment")
-    box.Name = "KeyESPBox"
-    box.Adornee = hitbox
-    box.AlwaysOnTop = true
-    box.ZIndex = 5
-    box.Color3 = Color3.fromRGB(255,255,0)
-    box.Transparency = 0.5
-    box.Size = hitbox.Size
-    box.Parent = hitbox
-end
-
-local function scanObjectives()
-    -- Normal objectives
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if table.find(Objectives, obj.Name) then
-            createObjectiveESP(obj)
-        end
-    end
-
-    -- Keys
-    for _, room in ipairs(workspace.CurrentRooms:GetChildren()) do
-        local key = room:FindFirstChild("KeyObtain", true)
-
-        if key then
-            local hitbox = key:FindFirstChild("KeyHitbox", true)
-
-            if hitbox and hitbox:IsA("BasePart") then
-                createKeyESP(hitbox)
-            end
-        end
-    end
-end
-
-local function removeObjectiveESP()
-    for _, v in ipairs(workspace:GetDescendants()) do
-        local h1 = v:FindFirstChild("ObjectiveESPHighlight")
-        local b1 = v:FindFirstChild("ObjectiveESPBox")
-        local h2 = v:FindFirstChild("KeyESPHighlight")
-        local b2 = v:FindFirstChild("KeyESPBox")
-
-        if h1 then h1:Destroy() end
-        if b1 then b1:Destroy() end
-        if h2 then h2:Destroy() end
-        if b2 then b2:Destroy() end
-    end
-end
-
---======================================================
--- PLAYER HITBOX ESP
---======================================================
-
-local PlayerESPEnabled = false
-local PlayerESPObjects = {}
-local RainbowConnection = nil
-local RainbowHue = 0
-
-local function RemovePlayerESP(Player)
-    local Box = PlayerESPObjects[Player]
-
-    if Box then
-        Box:Destroy()
-        PlayerESPObjects[Player] = nil
-    end
-end
-
-local function AddPlayerESP(Player)
-    if Player == LocalPlayer or not PlayerESPEnabled then
-        return
-    end
-
-    local Character = Player.Character
-    if not Character then
-        return
-    end
-
-    local RootPart = Character:FindFirstChild("HumanoidRootPart")
-    if not RootPart then
-        return
-    end
-
-    RemovePlayerESP(Player)
-
-    local Box = Instance.new("BoxHandleAdornment")
-    Box.Name = "PlayerHitboxESP"
-    Box.Adornee = RootPart
-    Box.Size = Vector3.new(4, 6, 2)
-
-    -- Rainbow color is updated below
-    Box.Color3 = Color3.fromHSV(RainbowHue, 1, 1)
-
-    Box.Transparency = 0.35
-    Box.AlwaysOnTop = true
-    Box.ZIndex = 5
-    Box.Parent = RootPart
-
-    PlayerESPObjects[Player] = Box
-end
-
-local function UpdatePlayerESP()
-    for _, Player in ipairs(Players:GetPlayers()) do
-        if Player ~= LocalPlayer then
-            AddPlayerESP(Player)
-        end
-    end
-end
-
--- Slowly cycle through the rainbow
-RainbowConnection = game:GetService("RunService").Heartbeat:Connect(function(DeltaTime)
-    if not PlayerESPEnabled then
-        return
-    end
-
-    -- Lower number = slower rainbow
-    RainbowHue = (RainbowHue + DeltaTime * 0.025) % 1
-
-    local RainbowColor = Color3.fromHSV(RainbowHue, 1, 1)
-
-    for _, Box in pairs(PlayerESPObjects) do
-        if Box and Box.Parent then
-            Box.Color3 = RainbowColor
-        end
-    end
-end)
-
--- RAYFIELD TOGGLE
-ChamsTab:CreateToggle({
-    Name = "Player ESP",
-    CurrentValue = false,
-    Flag = "PlayerHitboxESP",
-
-    Callback = function(Value)
-        PlayerESPEnabled = Value
-
-        if Value then
-            UpdatePlayerESP()
-        else
-            for Player in pairs(PlayerESPObjects) do
-                RemovePlayerESP(Player)
-            end
-        end
-    end,
-})
-
--- Existing players + respawns
-for _, Player in ipairs(Players:GetPlayers()) do
-    if Player ~= LocalPlayer then
-
-        Player.CharacterAdded:Connect(function(Character)
-            local RootPart = Character:WaitForChild("HumanoidRootPart", 10)
-
-            if RootPart then
-                task.wait(0.1)
-                AddPlayerESP(Player)
-            end
+    elseif target:IsA("Model") then
+        local success, cf, size = pcall(function()
+            return target:GetBoundingBox()
         end)
 
-        if Player.Character then
-            task.defer(function()
-                AddPlayerESP(Player)
+        if not success then
+            return
+        end
+
+        adornee = Instance.new("Part")
+        adornee.Name = name
+        adornee.Anchored = true
+        adornee.CanCollide = false
+        adornee.CanTouch = false
+        adornee.CanQuery = false
+        adornee.Transparency = 1
+        adornee.Size = Vector3.new(0.1, 0.1, 0.1)
+        adornee.CFrame = cf
+        adornee.Parent = target
+
+        boxSize = size
+        boxCFrame = CFrame.identity
+
+    else
+        return
+    end
+
+    local box = Instance.new("BoxHandleAdornment")
+    box.Name = name
+    box.Adornee = adornee
+    box.Size = boxSize
+    box.CFrame = boxCFrame
+    box.Color3 = color or Color3.new(1, 1, 1)
+    box.Transparency = 0.15
+    box.AlwaysOnTop = not TabletViewActive
+    box.ZIndex = 10
+    box.Parent = adornee
+
+    if target:IsA("Model") then
+        local connection
+
+        connection = game:GetService("RunService").RenderStepped:Connect(function()
+            if not target.Parent or not adornee.Parent or not box.Parent then
+                connection:Disconnect()
+                return
+            end
+
+            local ok, newCF, newSize = pcall(function()
+                return target:GetBoundingBox()
             end)
+
+            if ok then
+                adornee.CFrame = newCF
+                box.Size = newSize
+            end
+        end)
+    end
+
+    return box
+end
+
+local function RemoveNamedESP(...)
+    local wanted = {}
+    for _,name in ipairs({...}) do wanted[name]=true end
+    for _,obj in ipairs(workspace:GetDescendants()) do
+        if wanted[obj.Name] then obj:Destroy() end
+    end
+end
+
+local ESPInfoLabels = {}
+local function GetESPAnchor(target)
+    if not target then return nil end
+    if target:IsA("BasePart") then return target end
+    if target:IsA("Model") then return target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart", true) end
+    return target:FindFirstChildWhichIsA("BasePart", true)
+end
+local function AddESPInfoLabel(target, id, textProvider, color)
+    local anchor = GetESPAnchor(target)
+    if not anchor then return end
+    local old = anchor:FindFirstChild(id)
+    if old then old:Destroy() end
+    local gui=Instance.new("BillboardGui")
+    gui.Name=id; gui.Adornee=anchor; gui.AlwaysOnTop=not TabletViewActive; gui.Size=UDim2.fromOffset(150,28); gui.StudsOffset=Vector3.new(0,2.5,0); gui.MaxDistance=1000; gui.Parent=anchor
+    local t=Instance.new("TextLabel")
+    t.BackgroundTransparency=1; t.Size=UDim2.fromScale(1,1); t.Font=Enum.Font.GothamBold; t.TextSize=13; t.TextColor3=color or Color3.new(1,1,1); t.TextStrokeTransparency=.2; t.TextStrokeColor3=Color3.new(); t.Parent=gui
+    ESPInfoLabels[gui]={target=target, provider=textProvider, label=t}
+    local ok,res=pcall(textProvider,target) if ok then t.Text=res end
+    gui.Destroying:Connect(function() ESPInfoLabels[gui]=nil end)
+end
+game:GetService("RunService").Heartbeat:Connect(function()
+        if not LightningHaxAlive then return end
+    for gui,data in pairs(ESPInfoLabels) do
+        if not gui.Parent or not data.target or not data.target.Parent then ESPInfoLabels[gui]=nil
+        else local ok,res=pcall(data.provider,data.target); if ok then data.label.Text=res end end
+    end
+end)
+
+local InstantPromptsEnabled=false
+local InstantPromptConnection=nil
+local PromptHoldDurations={}
+
+local function SetPromptInstant(prompt)
+    if not prompt:IsA("ProximityPrompt") then return end
+    if PromptHoldDurations[prompt]==nil then
+        PromptHoldDurations[prompt]=prompt.HoldDuration
+    end
+    prompt.HoldDuration=0
+end
+
+ExploitsTab:CreateToggle({
+    Name="Instant Proximity Prompts",
+    CurrentValue=false,
+    Flag="InstantProximityPrompts",
+    Callback=function(v)
+        InstantPromptsEnabled=v
+
+        if InstantPromptConnection then
+            InstantPromptConnection:Disconnect()
+            InstantPromptConnection=nil
+        end
+
+        if v then
+            task.spawn(function()
+                local descendants=workspace:GetDescendants()
+                for i,obj in ipairs(descendants) do
+                    if not InstantPromptsEnabled then break end
+                    if obj:IsA("ProximityPrompt") then
+                        SetPromptInstant(obj)
+                    end
+                    if i%250==0 then task.wait() end
+                end
+            end)
+
+            InstantPromptConnection=workspace.DescendantAdded:Connect(function(obj)
+        if not LightningHaxAlive then return end
+                if InstantPromptsEnabled and obj:IsA("ProximityPrompt") then
+                    SetPromptInstant(obj)
+                end
+            end)
+        else
+            for prompt,duration in pairs(PromptHoldDurations) do
+                if prompt and prompt.Parent then
+                    prompt.HoldDuration=duration
+                end
+            end
+            table.clear(PromptHoldDurations)
+        end
+    end
+})
+
+local ChestESPEnabled = false
+local ChestESPConnection
+local ChestNames = {"Toolshed_Small","Chest_Vine","ChestBox","ChestBoxLocked","MouseHole","Locker_Small_Locked","Toolbox_Locked","Toolbox"}
+local function IsChest(obj)
+    return obj and obj.Parent and obj:IsA("Model") and table.find(ChestNames,obj.Name)~=nil and IsObjectInESPRange(obj)
+end
+local function IsChestLocked(obj)
+    if not IsChest(obj) then return false end
+    if string.find(string.lower(obj.Name),"locked",1,true) then return true end
+    local attr=obj:GetAttribute("Locked")
+    if attr~=nil then return attr==true end
+    local value=obj:FindFirstChild("Locked",true)
+    if value and value:IsA("BoolValue") then return value.Value end
+    local lock=obj:FindFirstChild("Lock",true)
+    if lock then
+        local lockAttr=lock:GetAttribute("Locked")
+        if lockAttr~=nil then return lockAttr==true end
+    end
+    return false
+end
+local function MarkChest(obj)
+    if not ChestESPEnabled or not IsChest(obj) then return end
+    AddHighlight(obj,"ChestESP",ESP_YELLOW,0.78)
+    AddESPInfoLabel(obj,"ChestESPLabel",function(target)
+        return IsChestLocked(target) and "Chest  |  Locked" or "Chest"
+    end,ESP_YELLOW)
+end
+local function ValidateAndMarkChest(obj)
+    task.wait(0.12)
+    if not ChestESPEnabled or not IsChest(obj) then return end
+    local parent=obj.Parent
+    task.wait(0.06)
+    if ChestESPEnabled and IsChest(obj) and obj.Parent==parent then MarkChest(obj) end
+end
+local function ScanChests()
+    if TabletSuppressingESP then return end
+    local current=GetCurrentRoomNumber()
+    for _,n in ipairs({current,current and current+1}) do
+        local room=n and workspace.CurrentRooms:FindFirstChild(tostring(n))
+        if room then
+            for _,obj in ipairs(room:GetDescendants()) do
+                if IsChest(obj) then MarkChest(obj) end
+            end
+        end
+    end
+end
+ChamsTab:CreateToggle({Name="Chest ESP",CurrentValue=false,Flag="ChestESP",Callback=function(v)
+    ChestESPEnabled=v
+    if ChestESPConnection then ChestESPConnection:Disconnect(); ChestESPConnection=nil end
+    if v then
+        ScanChests()
+        ChestESPConnection=workspace.CurrentRooms.ChildAdded:Connect(function(room)
+        if not LightningHaxAlive then return end
+            if ChestESPEnabled and IsRoomInESPRange(room) then task.delay(0.25,ScanChests) end
+        end)
+    else
+        RemoveNamedESP("ChestESP","ChestESPLabel")
+    end
+end})
+
+local ItemESPEnabled = false
+local ItemESPConnection
+local ItemNames = {
+    "Lighter","Flashlight","Lockpick","Vitamins","Bandage","StarVial","StarBottle","StarJug","Shakelight","Straplight",
+    "Bulklight","Battery","Candle","Crucifix","CrucifixWall","Glowsticks","SkeletonKey","Candy","ShieldMini","ShieldBig",
+    "BandagePack","BatteryPack","RiftCandle","LaserPointer","HolyGrenade","Shears","Smoothie","Cheese","Bread","AlarmClock",
+    "RiftSmoothie","GweenSoda","GlitchCube","Scanner","Bomb","Knockbomb","Nanner","BigBomb","SnakeBox","GoldGun","StopSign",
+    "TipJar","Lantern","IronKey","LotusPetal","Compass","LotusPetalPickup","LanternLitItem","KeyIron","IronKeyForCrypt","LotusHolder",
+    "Multitool","RiftJar","AloeVera","Donut","Lotus","BoxingGloves","Green_Herb"
+}
+local function IsRealPickup(obj)
+    if not (obj:IsA("Model") or obj:IsA("Tool")) then return false end
+    if not table.find(ItemNames, obj.Name) then return false end
+    if obj.Name == "Bookcase" or obj:FindFirstAncestor("Bookcase") then return false end
+    if not IsObjectInESPRange(obj) then return false end
+    if obj:IsA("Tool") then return true end
+    if obj:FindFirstChildWhichIsA("ProximityPrompt", true) then return true end
+    if obj:FindFirstChild("Pickup", true) or obj:FindFirstChild("ModulePrompt", true) then return true end
+    return false
+end
+local function ItemDisplayName(obj)
+    local n=obj.Name
+    if n=="KeyObtain" or n=="KeyHitbox" then return "Key" end
+    return n
+end
+local function MarkItem(obj)
+    if not obj or not obj.Parent then return end
+    AddHighlight(obj,"ItemESP",ESP_YELLOW,0.78)
+    AddESPInfoLabel(obj,"ItemESPLabel",function() return obj.Name end,ESP_YELLOW)
+end
+local function ScanItems()
+    if TabletSuppressingESP then return end
+    local current=GetCurrentRoomNumber()
+    for _,n in ipairs({current,current and current+1}) do
+        local room=n and workspace.CurrentRooms:FindFirstChild(tostring(n))
+        if room then
+            for _,obj in ipairs(room:GetDescendants()) do
+                if IsRealPickup(obj) then MarkItem(obj) end
+            end
+        end
+    end
+end
+ChamsTab:CreateToggle({Name="Item ESP",CurrentValue=false,Flag="ItemESP",Callback=function(v)
+    ItemESPEnabled=v
+    if ItemESPConnection then ItemESPConnection:Disconnect(); ItemESPConnection=nil end
+    if v then
+        ScanItems()
+        ItemESPConnection=workspace.CurrentRooms.ChildAdded:Connect(function(room)
+        if not LightningHaxAlive then return end
+            if ItemESPEnabled and IsRoomInESPRange(room) then task.delay(0.25,ScanItems) end
+        end)
+    else RemoveNamedESP("ItemESP","ItemESPLabel") end
+end})
+
+local ObjectiveESPEnabled=false
+local ObjectiveConnection
+local DoorESPEnabled=false
+local DoorESPConnection
+local Objectives={"LeverForGate","LiveBreakerPolePickup","LiveHintBook","FuseObtain","MinesAnchor","WaterPump","TimerLever"}
+
+local function IsDupeObject(obj)
+    local p=obj
+    while p and p~=workspace do
+        local n=string.lower(p.Name)
+        if string.find(n,"dupe",1,true) or string.find(n,"sideroom",1,true) then return true end
+        p=p.Parent
+    end
+    return false
+end
+
+local function GetRoomModel(obj)
+    local p=obj
+    while p and p.Parent~=workspace.CurrentRooms do p=p.Parent end
+    return p and p.Parent==workspace.CurrentRooms and p or nil
+end
+
+local ReadDoorLockForDisplay
+
+local function MarkRealDoor(room)
+    if not DoorESPEnabled or not room or tonumber(room.Name)==nil or not IsRoomInESPRange(room) then return end
+    local doorContainer=room:FindFirstChild("Door")
+    if not doorContainer or IsDupeObject(doorContainer) then return end
+
+    local physicalDoor=doorContainer:FindFirstChild("Door")
+    if not physicalDoor or not physicalDoor:IsA("BasePart") then return end
+
+    local doorFill=AddHighlight(physicalDoor,"RealDoorESP",ESP_GREEN,0.80)
+    if doorFill then doorFill.OutlineTransparency=1 end
+
+    local specialDoubleAnchor=nil
+    if room.Name=="49" or room.Name=="50" then
+        local visibleParts={}
+        local minV,maxV=nil,nil
+
+        for _,obj in ipairs(doorContainer:GetDescendants()) do
+            if obj:IsA("BasePart")
+                and obj.Name~="LightningDoubleDoorESPAnchor"
+                and not obj:FindFirstAncestor("Lock") then
+
+                -- Use the real rendered geometry so Highlight actually draws.
+                local lname=obj.Name:lower()
+                local parentName=obj.Parent and obj.Parent.Name:lower() or ""
+                if obj==physicalDoor or lname:find("door") or parentName:find("door") then
+                    table.insert(visibleParts,obj)
+
+                    local cf,size=obj.CFrame,obj.Size
+                    for x=-1,1,2 do
+                        for y=-1,1,2 do
+                            for z=-1,1,2 do
+                                local p=(cf*CFrame.new(size.X*x/2,size.Y*y/2,size.Z*z/2)).Position
+                                minV=minV and Vector3.new(
+                                    math.min(minV.X,p.X),math.min(minV.Y,p.Y),math.min(minV.Z,p.Z)
+                                ) or p
+                                maxV=maxV and Vector3.new(
+                                    math.max(maxV.X,p.X),math.max(maxV.Y,p.Y),math.max(maxV.Z,p.Z)
+                                ) or p
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Highlight every real part belonging to either leaf, never the invisible anchor.
+        if doorFill then doorFill:Destroy() end
+        for _,part in ipairs(visibleParts) do
+            local fill=AddHighlight(part,"RealDoorESP",ESP_GREEN,0.80)
+            if fill then fill.OutlineTransparency=1 end
+        end
+
+        -- Invisible part is only a BillboardGui anchor at the exact center of both leaves.
+        if minV and maxV then
+            specialDoubleAnchor=Instance.new("Part")
+            specialDoubleAnchor.Name="LightningDoubleDoorESPAnchor"
+            specialDoubleAnchor.Anchored=true
+            specialDoubleAnchor.CanCollide=false
+            specialDoubleAnchor.CanTouch=false
+            specialDoubleAnchor.CanQuery=false
+            specialDoubleAnchor.Transparency=1
+            specialDoubleAnchor.Size=Vector3.new(0.1,0.1,0.1)
+            specialDoubleAnchor.CFrame=CFrame.new((minV+maxV)/2)
+            specialDoubleAnchor.Parent=doorContainer
+        end
+    end
+
+    local crossBoards=physicalDoor:FindFirstChild("CrossBoards")
+    if crossBoards and (crossBoards:IsA("BasePart") or crossBoards:IsA("Model")) then
+        local crossHighlight=AddHighlight(crossBoards,"RealDoorCrossFill",ESP_GREEN,0.80)
+        if crossHighlight then crossHighlight.OutlineTransparency=1 end
+    end
+
+    local borderSignature=string.format("%.4f|%.4f|%.4f",physicalDoor.Size.X,physicalDoor.Size.Y,physicalDoor.Size.Z)
+    local existingBorder=physicalDoor:FindFirstChild("RealDoorOuterBorder")
+    if existingBorder and existingBorder:GetAttribute("DoorSizeSignature")~=borderSignature then
+        existingBorder:Destroy()
+        existingBorder=nil
+    end
+    if not existingBorder then
+        local borderFolder=Instance.new("Folder")
+        borderFolder.Name="RealDoorOuterBorder"
+        borderFolder.Parent=physicalDoor
+
+        local half=physicalDoor.Size * 0.5
+        local thickness=0.035
+        local function edge(name,cf,length)
+            local line=Instance.new("LineHandleAdornment")
+            line.Name=name
+            line.Adornee=physicalDoor
+            line.CFrame=cf
+            line.Length=length
+            line.Thickness=thickness
+            line.Color3=ESP_GREEN
+            line.AlwaysOnTop=true
+            line.ZIndex=10
+            line.Parent=borderFolder
+        end
+
+        for _,y in ipairs({-half.Y,half.Y}) do
+            for _,z in ipairs({-half.Z,half.Z}) do
+                edge("XEdge",CFrame.new(-half.X,y,z)*CFrame.Angles(0,math.rad(-90),0),physicalDoor.Size.X)
+            end
+        end
+        for _,x in ipairs({-half.X,half.X}) do
+            for _,z in ipairs({-half.Z,half.Z}) do
+                edge("YEdge",CFrame.new(x,-half.Y,z)*CFrame.Angles(math.rad(90),0,0),physicalDoor.Size.Y)
+            end
+        end
+        for _,x in ipairs({-half.X,half.X}) do
+            for _,y in ipairs({-half.Y,half.Y}) do
+                edge("ZEdge",CFrame.new(x,y,half.Z),physicalDoor.Size.Z)
+            end
+        end
+        borderFolder:SetAttribute("DoorSizeSignature",borderSignature)
+    end
+
+    local function IsDoorActuallyLocked()
+        return ReadDoorLockForDisplay(doorContainer,physicalDoor)
+    end
+
+    local function GetRealDoorNumber()
+        local sign = physicalDoor:FindFirstChild("Sign")
+        if sign then
+            for _,desc in ipairs(sign:GetDescendants()) do
+                if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+                    local n = tostring(desc.Text):match("%d+")
+                    if n then return tonumber(n) end
+                end
+            end
+        end
+
+        for _,attrName in ipairs({"DoorNumber","RoomNumber","Number"}) do
+            local value = doorContainer:GetAttribute(attrName)
+            if typeof(value)=="number" then return value end
+            if typeof(value)=="string" and tonumber(value) then return tonumber(value) end
+        end
+
+        local roomNumber=tonumber(room.Name)
+        return roomNumber and (roomNumber+1) or room.Name
+    end
+
+    AddESPInfoLabel(specialDoubleAnchor or physicalDoor,"RealDoorESPLabel",function()
+        local doorNumber=GetRealDoorNumber()
+        local text=string.format("Door %s",doorNumber)
+        if IsDoorActuallyLocked() then
+            text=text.."  |  Locked"
+        end
+        return text
+    end,ESP_GREEN)
+end
+
+local DoorPending={}
+local DoorLockState={}
+DoorCollisionBackup={}
+
+RestoreDoorCollision=function(room)
+    local saved=DoorCollisionBackup[room]
+    if not saved then return end
+    for part,canCollide in pairs(saved) do
+        if part and part.Parent then part.CanCollide=canCollide end
+    end
+    DoorCollisionBackup[room]=nil
+end
+
+local function SetUnlockedDoorCollision(room,unlocked)
+    if not room or not room.Parent then return end
+    local doorContainer=room:FindFirstChild("Door")
+    if not doorContainer then return end
+
+    if doorContainer:GetAttribute("LightningBreakDoorsActive") then
+        return
+    end
+
+    if not unlocked then
+        RestoreDoorCollision(room)
+        return
+    end
+
+    local saved=DoorCollisionBackup[room]
+    if not saved then
+        saved={}
+        DoorCollisionBackup[room]=saved
+    end
+
+    for _,part in ipairs(doorContainer:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if saved[part]==nil then saved[part]=part.CanCollide end
+            part.CanCollide=false
         end
     end
 end
 
--- New players
-Players.PlayerAdded:Connect(function(Player)
-
-    Player.CharacterAdded:Connect(function(Character)
-        local RootPart = Character:WaitForChild("HumanoidRootPart", 10)
-
-        if RootPart then
-            task.wait(0.1)
-            AddPlayerESP(Player)
+local function ReadExplicitDoorLock(doorContainer,physicalDoor)
+    for _,target in ipairs({doorContainer,physicalDoor}) do
+        for _,attributeName in ipairs({"Locked","IsLocked","RequiresKey"}) do
+            local value=target:GetAttribute(attributeName)
+            if typeof(value)=="boolean" then
+                return value,true
+            end
         end
+    end
+
+    for _,name in ipairs({"Locked","IsLocked","RequiresKey"}) do
+        local value=doorContainer:FindFirstChild(name,true)
+        if value and value:IsA("BoolValue") then
+            return value.Value,true
+        end
+    end
+
+    local lock=doorContainer:FindFirstChild("Lock")
+    if lock then
+        for _,attributeName in ipairs({"Locked","IsLocked","RequiresKey"}) do
+            local value=lock:GetAttribute(attributeName)
+            if typeof(value)=="boolean" then
+                return value,true
+            end
+        end
+        for _,name in ipairs({"Locked","IsLocked","RequiresKey"}) do
+            local value=lock:FindFirstChild(name,true)
+            if value and value:IsA("BoolValue") then
+                return value.Value,true
+            end
+        end
+    end
+
+    return false,false
+end
+
+ReadDoorLockForDisplay=function(doorContainer,physicalDoor)
+    local locked,hasExplicit=ReadExplicitDoorLock(doorContainer,physicalDoor)
+    return hasExplicit and locked==true
+end
+
+VerifyDoorLock=function(room)
+    local dc=room and room:FindFirstChild("Door")
+    local pd=dc and dc:FindFirstChild("Door")
+    if not dc or not pd or not pd:IsA("BasePart") then return false end
+
+    local locked,hasExplicit=ReadExplicitDoorLock(dc,pd)
+
+    if not hasExplicit then
+        -- Unknown is not the same as unlocked. Never noclip a door until the
+        -- game explicitly confirms an unlocked state.
+        RestoreDoorCollision(room)
+        pd:SetAttribute("LightningVerifiedLocked",false)
+        return true
+    end
+
+    pd:SetAttribute("LightningVerifiedLocked",locked)
+
+    if locked then
+        RestoreDoorCollision(room)
+        pd.CanCollide=true
+    else
+        SetUnlockedDoorCollision(room,true)
+    end
+
+    return true
+end
+
+task.spawn(function()
+    while LightningHaxAlive do
+        task.wait(0.75)
+        local current=GetCurrentRoomNumber()
+        for _,n in ipairs({current,current and current+1}) do
+            local room=n and workspace.CurrentRooms:FindFirstChild(tostring(n))
+            if room then VerifyDoorLock(room) end
+        end
+
+        for room in pairs(DoorCollisionBackup) do
+            if not room.Parent then
+                DoorCollisionBackup[room]=nil
+                DoorLockState[room]=nil
+            end
+        end
+    end
+end)
+
+local function DoorIsStable(room)
+    if not IsRoomInESPRange(room) then return false end
+    local dc=room:FindFirstChild("Door")
+    local pd=dc and dc:FindFirstChild("Door")
+    if not pd or not pd:IsA("BasePart") then return false end
+    local size1=pd.Size
+    local cf1=pd.CFrame
+    task.wait(0.08)
+    if not pd.Parent or not IsRoomInESPRange(room) then return false end
+    return (pd.Size-size1).Magnitude<0.001 and (pd.Position-cf1.Position).Magnitude<0.001
+end
+
+local function TryMarkDoor(room)
+    if not DoorESPEnabled or not IsRoomInESPRange(room) then return false end
+    local doorContainer=room:FindFirstChild("Door")
+    if not doorContainer or IsDupeObject(doorContainer) then return false end
+    local physicalDoor=doorContainer:FindFirstChild("Door")
+    if not physicalDoor or not physicalDoor:IsA("BasePart") then return false end
+    if not DoorIsStable(room) then return false end
+    if not VerifyDoorLock(room) then return false end
+    MarkRealDoor(room)
+    return physicalDoor:FindFirstChild("RealDoorESP")~=nil
+end
+
+local function QueueDoor(room)
+    if TabletSuppressingESP then return end
+    if DoorPending[room] or not IsRoomInESPRange(room) then return end
+    DoorPending[room]=true
+    task.spawn(function()
+        for _=1,30 do
+            if not DoorESPEnabled or not room.Parent or not IsRoomInESPRange(room) then break end
+            if TryMarkDoor(room) then break end
+            task.wait(0.08)
+        end
+        DoorPending[room]=nil
     end)
+end
 
-end)
-
--- Remove ESP when player leaves
-Players.PlayerRemoving:Connect(function(Player)
-    RemovePlayerESP(Player)
-end)
-
-ChamsTab:CreateToggle({
-    Name = "ESP Objectives + Doors",
-    CurrentValue = false,
-    Flag = "ObjectiveHighlights",
-
-    Callback = function(Value)
-        ObjectiveESPEnabled = Value
-
-        if Value then
-            scanObjectives()
-
-            if ObjectiveConnection then
-                ObjectiveConnection:Disconnect()
+local function ScanDoors()
+    if TabletSuppressingESP then return end
+    local current=GetCurrentRoomNumber()
+    for _,n in ipairs({current,current and current+1}) do
+        local room=n and workspace.CurrentRooms:FindFirstChild(tostring(n))
+        if room then
+            local dc=room:FindFirstChild("Door")
+            local pd=dc and dc:FindFirstChild("Door")
+            if pd and pd:IsA("BasePart") and pd:FindFirstChild("RealDoorESP") then
+                VerifyDoorLock(room)
+            else
+                QueueDoor(room)
             end
-
-            ObjectiveConnection = workspace.DescendantAdded:Connect(function(obj)
-                if not ObjectiveESPEnabled then
-                    return
-                end
-
-                task.wait()
-
-                if table.find(Objectives, obj.Name) then
-                    createObjectiveESP(obj)
-                end
-
-                if obj.Name == "KeyHitbox" and obj:IsA("BasePart") then
-                    createKeyESP(obj)
-                end
-            end)
-        else
-            if ObjectiveConnection then
-                ObjectiveConnection:Disconnect()
-                ObjectiveConnection = nil
-            end
-
-            removeObjectiveESP()
         end
-    end,
-})
+    end
+end
+
+ChamsTab:CreateToggle({Name="Door ESP",CurrentValue=false,Flag="DoorESP",Callback=function(v)
+    DoorESPEnabled=v
+    if DoorESPConnection then DoorESPConnection:Disconnect(); DoorESPConnection=nil end
+    if v then
+        ScanDoors()
+        DoorESPConnection=workspace.CurrentRooms.ChildAdded:Connect(function(room)
+        if not LightningHaxAlive then return end
+            if DoorESPEnabled and IsRoomInESPRange(room) then QueueDoor(room) end
+        end)
+    else
+        table.clear(DoorPending)
+        RemoveNamedESP("RealDoorESP","RealDoorCrossFill","RealDoorOuterBorder","RealDoorESPLabel")
+    end
+end})
+
+local function IsObjective(obj)
+    if not obj or not obj.Parent then return false end
+    if not table.find(Objectives,obj.Name) then return false end
+    if not IsObjectInESPRange(obj) then return false end
+    if not (obj:IsA("Model") or obj:IsA("BasePart") or obj:IsA("Folder")) then return false end
+
+    if obj.Name=="LeverForGate" or obj.Name=="TimerLever" then
+        local prompt=obj:FindFirstChildWhichIsA("ProximityPrompt",true)
+        return prompt~=nil and prompt.Enabled
+    end
+
+    return true
+end
+
+local function ObjectiveDisplayName(obj)
+    if obj.Name=="LeverForGate" or obj.Name=="TimerLever" then return "Lever" end
+    if obj.Name=="LiveBreakerPolePickup" then return "Breaker" end
+    if obj.Name=="LiveHintBook" then return "Book" end
+    if obj.Name=="FuseObtain" then return "Fuse" end
+    if obj.Name=="MinesAnchor" then return "Anchor" end
+    if obj.Name=="WaterPump" then return "Water Pump" end
+    return obj.Name
+end
+
+local ObjectiveStableState={}
+
+local function IsLeverObjective(obj)
+    return obj and (obj.Name=="LeverForGate" or obj.Name=="TimerLever")
+end
+
+local function IsStableObjective(obj)
+    if not IsObjective(obj) then
+        ObjectiveStableState[obj]=nil
+        return false
+    end
+    if not IsLeverObjective(obj) then return true end
+
+    local prompt=obj:FindFirstChildWhichIsA("ProximityPrompt",true)
+    if not prompt or not prompt.Enabled then
+        ObjectiveStableState[obj]=nil
+        return false
+    end
+
+    local now=os.clock()
+    local state=ObjectiveStableState[obj]
+    if not state or state.parent~=obj.Parent or state.prompt~=prompt then
+        ObjectiveStableState[obj]={parent=obj.Parent,prompt=prompt,since=now}
+        return false
+    end
+
+    return now-state.since>=1
+end
+
+local function MarkObjective(obj)
+    if IsObjective(obj) then
+        if IsLeverObjective(obj) and not IsStableObjective(obj) then return end
+        AddHighlight(obj,"ObjectiveESP",ESP_GREEN,0.78)
+        AddESPInfoLabel(obj,"ObjectiveESPLabel",function(target)
+            return ObjectiveDisplayName(target)
+        end,ESP_GREEN)
+    end
+    if obj.Name=="KeyObtain" and obj:IsA("Model") and IsObjectInESPRange(obj) then
+        AddHighlight(obj,"KeyESP",ESP_YELLOW,0.72)
+        AddESPInfoLabel(obj,"KeyESPLabel",function() return "Key" end,ESP_YELLOW)
+    end
+end
+
+local function ValidateObjective(obj)
+    task.wait(0.20)
+    if not ObjectiveESPEnabled or not obj.Parent then return end
+    local parent=obj.Parent
+    local valid=IsObjective(obj) or (obj.Name=="KeyObtain" and obj:IsA("Model") and IsObjectInESPRange(obj))
+    if not valid then return end
+    task.wait(0.10)
+    if not ObjectiveESPEnabled or not obj.Parent or obj.Parent~=parent then return end
+    valid=IsObjective(obj) or (obj.Name=="KeyObtain" and obj:IsA("Model") and IsObjectInESPRange(obj))
+    if valid then MarkObjective(obj) end
+end
+
+local function ScanObjectives()
+    if TabletSuppressingESP then return end
+    local current=GetCurrentRoomNumber()
+    for _,n in ipairs({current,current and current+1}) do
+        local room=n and workspace.CurrentRooms:FindFirstChild(tostring(n))
+        if room then
+            for _,obj in ipairs(room:GetDescendants()) do
+                if IsStableObjective(obj) or (obj.Name=="KeyObtain" and IsObjectInESPRange(obj)) then MarkObjective(obj) end
+            end
+        end
+    end
+end
+
+ChamsTab:CreateToggle({Name="Objective ESP",CurrentValue=false,Flag="ObjectiveESP",Callback=function(v)
+    ObjectiveESPEnabled=v
+    if ObjectiveConnection then ObjectiveConnection:Disconnect(); ObjectiveConnection=nil end
+    if v then
+        ScanObjectives()
+        ObjectiveConnection=workspace.CurrentRooms.ChildAdded:Connect(function(room)
+        if not LightningHaxAlive then return end
+            if ObjectiveESPEnabled and IsRoomInESPRange(room) then task.delay(0.25,ScanObjectives) end
+        end)
+    else
+        RemoveNamedESP("ObjectiveESP","ObjectiveESPLabel","KeyESP","KeyESPLabel")
+    end
+end})
+
+local RoomESPNames={
+    RealDoorESP=true,RealDoorCrossFill=true,RealDoorOuterBorder=true,RealDoorESPLabel=true,
+    ChestESP=true,ChestESPLabel=true,ItemESP=true,ItemESPLabel=true,
+    ObjectiveESP=true,ObjectiveESPLabel=true,KeyESP=true,KeyESPLabel=true
+}
+
+local LastESPCurrentRoom=nil
+
+local function PurgeOutOfRangeRoomESP()
+    local current=GetCurrentRoomNumber()
+    if current==nil or LastESPCurrentRoom==current then return end
+    LastESPCurrentRoom=current
+
+    for _,room in ipairs(workspace.CurrentRooms:GetChildren()) do
+        local n=tonumber(room.Name)
+        if n and n<current then
+            for _,obj in ipairs(room:GetDescendants()) do
+                if RoomESPNames[obj.Name] then obj:Destroy() end
+            end
+        end
+    end
+end
+
+local function ReconcileRoomESP()
+    if TabletSuppressingESP then return end
+    PurgeOutOfRangeRoomESP()
+    if DoorESPEnabled then ScanDoors() end
+    if ChestESPEnabled then ScanChests() end
+    if ItemESPEnabled then ScanItems() end
+    if ObjectiveESPEnabled then ScanObjectives() end
+end
+
+LatestRoomValue:GetPropertyChangedSignal("Value"):Connect(function()
+        if not LightningHaxAlive then return end
+    task.defer(ReconcileRoomESP)
+end)
+
+LocalPlayer:GetAttributeChangedSignal("CurrentRoom"):Connect(function()
+        if not LightningHaxAlive then return end
+    task.defer(ReconcileRoomESP)
+end)
+
+workspace.CurrentRooms.ChildAdded:Connect(function(room)
+        if not LightningHaxAlive then return end
+    task.delay(0.22,function()
+        if room.Parent and IsRoomInESPRange(room) then ReconcileRoomESP() end
+    end)
+end)
+
+workspace.CurrentRooms.ChildRemoved:Connect(function(room)
+        if not LightningHaxAlive then return end
+    DoorPending[room]=nil
+    DoorLockState[room]=nil
+    DoorCollisionBackup[room]=nil
+end)
+
+task.spawn(function()
+    while LightningHaxAlive do
+        task.wait(2)
+        if DoorESPEnabled or ChestESPEnabled or ItemESPEnabled or ObjectiveESPEnabled then
+            ReconcileRoomESP()
+        end
+    end
+end)
+
+
+local PlayerESPEnabled=false
+local PlayerESPObjects={}
+local RainbowHue=0
+local function RemovePlayerESP(player) local b=PlayerESPObjects[player]; if b then b:Destroy(); PlayerESPObjects[player]=nil end end
+local function AddPlayerESP(player)
+    if TabletSuppressingESP then return end
+    if player==LocalPlayer or not PlayerESPEnabled then return end
+    local char=player.Character; local root=char and char:FindFirstChild("HumanoidRootPart"); if not root then return end
+    RemovePlayerESP(player)
+    local box=Instance.new("BoxHandleAdornment"); box.Name="PlayerHitboxESP"; box.Adornee=root; box.Size=Vector3.new(4,6,2); box.Color3=Color3.fromHSV(RainbowHue,1,1); box.Transparency=.35; box.AlwaysOnTop=true; box.ZIndex=5; box.Parent=root
+    PlayerESPObjects[player]=box
+end
+game:GetService("RunService").Heartbeat:Connect(function(dt)
+        if not LightningHaxAlive then return end
+    if not PlayerESPEnabled then return end
+    RainbowHue=(RainbowHue+dt*.025)%1; local c=Color3.fromHSV(RainbowHue,1,1)
+    for _,box in pairs(PlayerESPObjects) do if box and box.Parent then box.Color3=c end end
+end)
+ChamsTab:CreateToggle({Name="Player ESP",CurrentValue=false,Flag="PlayerHitboxESP",Callback=function(v)
+    PlayerESPEnabled=v
+    if v then for _,p in ipairs(Players:GetPlayers()) do AddPlayerESP(p) end else for p in pairs(PlayerESPObjects) do RemovePlayerESP(p) end end
+end})
+for _,p in ipairs(Players:GetPlayers()) do if p~=LocalPlayer then p.CharacterAdded:Connect(function() task.wait(.1); AddPlayerESP(p) end) end end
+Players.PlayerAdded:Connect(function(p) p.CharacterAdded:Connect(function() task.wait(.1); AddPlayerESP(p) end) end)
+Players.PlayerRemoving:Connect(RemovePlayerESP)
+
+local EntityESPEnabled=false
+local EntityNotificationsEnabled=false
+local EntityConnections={}
+local EntityBillboards={}
+local FigureHitboxTransparency={}
+local EntityNotified={}
+
+local function DisconnectEntityESP()
+    for _,c in ipairs(EntityConnections) do pcall(function() c:Disconnect() end) end
+    table.clear(EntityConnections)
+    for _,gui in pairs(EntityBillboards) do if gui and gui.Parent then gui:Destroy() end end
+    table.clear(EntityBillboards)
+end
+
+local function GetEntityPart(model)
+    if not model or not model.Parent then return nil end
+    if model:IsA("BasePart") then return model end
+    if model:IsA("Model") and model.PrimaryPart then return model.PrimaryPart end
+    return model:FindFirstChild("RushNew",true)
+        or model:FindFirstChild("HumanoidRootPart",true)
+        or model:FindFirstChild("Torso",true)
+        or model:FindFirstChildWhichIsA("BasePart",true)
+end
+
+local function GetEntityDistance(model)
+    local character=LocalPlayer.Character
+    local playerRoot=character and character:FindFirstChild("HumanoidRootPart")
+    local entityPart=GetEntityPart(model)
+    if not playerRoot or not entityPart then return nil end
+    return math.floor((playerRoot.Position-entityPart.Position).Magnitude+0.5)
+end
+
+local function NotifyEntity(model,displayName)
+    if not EntityNotificationsEnabled or EntityNotified[model] then return end
+    EntityNotified[model]=true
+    Rayfield:Notify({
+        Title="Entity Spawned",
+        Content=displayName.." has spawned.",
+        Duration=4,
+        Image=4483345998
+    })
+end
+
+local function AddEntityLabel(model,displayName,showDistance)
+    local part=GetEntityPart(model)
+    if not part or EntityBillboards[model] then return end
+    local gui=Instance.new("BillboardGui")
+    gui.Name="EntityESPLabel"
+    gui.Adornee=part
+    gui.AlwaysOnTop=not TabletViewActive
+    gui.Size=UDim2.fromOffset(165,32)
+    gui.StudsOffset=Vector3.new(0,3,0)
+    gui.MaxDistance=1000
+    gui.Parent=part
+    local text=Instance.new("TextLabel")
+    text.BackgroundTransparency=1
+    text.Size=UDim2.fromScale(1,1)
+    text.Font=Enum.Font.GothamBold
+    text.TextSize=13
+    text.TextColor3=ESP_RED
+    text.TextStrokeTransparency=0.15
+    text.TextStrokeColor3=Color3.new(0,0,0)
+    text.Parent=gui
+    EntityBillboards[model]={gui=gui,text=text,name=displayName,distance=showDistance}
+end
+
+local function TrackEntity(obj)
+    if TabletSuppressingESP then return end
+    if not obj or not obj.Parent then return end
+    local displayName,showDistance
+    if obj.Name=="RushMoving" then displayName,showDistance="Rush",true
+    elseif obj.Name=="AmbushMoving" then displayName,showDistance="Ambush",true
+    elseif obj.Name=="Eyes" and obj.Parent==workspace then displayName,showDistance="Eyes",false
+    elseif obj.Name=="FigureRig" and obj:FindFirstAncestor("CurrentRooms") then displayName,showDistance="Figure",true
+    else return end
+    NotifyEntity(obj,displayName)
+    if EntityESPEnabled then
+        AddEntityLabel(obj,displayName,showDistance)
+        if displayName=="Figure" then
+            local hitbox=obj:FindFirstChild("Hitbox",true)
+            if hitbox and hitbox:IsA("BasePart") then
+                if FigureHitboxTransparency[hitbox]==nil then FigureHitboxTransparency[hitbox]=hitbox.Transparency end
+                hitbox.Transparency=1
+            end
+            if not obj:FindFirstChild("FigureESP") then
+                local h=Instance.new("Highlight")
+                h.Name="FigureESP"
+                h.Adornee=obj
+                h.FillColor=ESP_RED
+                h.FillTransparency=0.72
+                h.OutlineColor=ESP_RED
+                h.OutlineTransparency=0
+                h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+                h.Parent=obj
+            end
+        end
+    end
+end
+
+local function ScanEntities()
+    if TabletSuppressingESP then return end
+    TrackEntity(workspace:FindFirstChild("RushMoving"))
+    TrackEntity(workspace:FindFirstChild("AmbushMoving"))
+    TrackEntity(workspace:FindFirstChild("Eyes"))
+    for _,room in ipairs(workspace.CurrentRooms:GetChildren()) do
+        local rig=room:FindFirstChild("FigureRig")
+        if not rig then
+            local fs=room:FindFirstChild("FigureSetup")
+            rig=fs and fs:FindFirstChild("FigureRig")
+        end
+        if rig then TrackEntity(rig) end
+    end
+end
+
+game:GetService("RunService").Heartbeat:Connect(function()
+        if not LightningHaxAlive then return end
+    for model,data in pairs(EntityBillboards) do
+        if not model or not model.Parent or not data.gui or not data.gui.Parent then
+            EntityBillboards[model]=nil
+        elseif data.distance then
+            local dist=GetEntityDistance(model)
+            data.text.Text=dist and string.format("%s  |  %d studs",data.name,dist) or data.name
+        else
+            data.text.Text=data.name
+        end
+    end
+end)
+
+local function EnsureEntityWatchers()
+    if #EntityConnections>0 then return end
+    table.insert(EntityConnections,workspace.ChildAdded:Connect(function(obj)
+        if not LightningHaxAlive then return end
+        if obj.Name=="RushMoving" or obj.Name=="AmbushMoving" or obj.Name=="Eyes" then
+            task.defer(TrackEntity,obj)
+        end
+    end))
+    table.insert(EntityConnections,workspace.CurrentRooms.ChildAdded:Connect(function(room)
+        if not LightningHaxAlive then return end
+        task.defer(function()
+            local rig=room:FindFirstChild("FigureRig")
+            if not rig then
+                local fs=room:FindFirstChild("FigureSetup")
+                rig=fs and fs:FindFirstChild("FigureRig")
+            end
+            if rig then TrackEntity(rig) end
+        end)
+    end))
+    table.insert(EntityConnections,workspace.CurrentRooms.DescendantAdded:Connect(function(obj)
+        if not LightningHaxAlive then return end
+        if obj:IsA("Model") and obj.Name=="FigureRig" then
+            task.defer(TrackEntity,obj)
+        end
+    end))
+end
+
+ChamsTab:CreateToggle({Name="Entity ESP",CurrentValue=false,Flag="EntityESP",Callback=function(v)
+    EntityESPEnabled=v
+    EnsureEntityWatchers()
+    if v then ScanEntities()
+    else
+        for model,data in pairs(EntityBillboards) do
+            if data.gui and data.gui.Parent then data.gui:Destroy() end
+            EntityBillboards[model]=nil
+        end
+        for _,obj in ipairs(workspace.CurrentRooms:GetDescendants()) do
+            if obj.Name=="FigureESP" and obj:IsA("Highlight") then obj:Destroy() end
+        end
+        for hitbox,transparency in pairs(FigureHitboxTransparency) do
+            if hitbox and hitbox.Parent then hitbox.Transparency=transparency end
+            FigureHitboxTransparency[hitbox]=nil
+        end
+    end
+end})
+
+ChamsTab:CreateToggle({Name="Entity Spawn Notifications",CurrentValue=false,Flag="EntitySpawnNotifications",Callback=function(v)
+    EntityNotificationsEnabled=v
+    EnsureEntityWatchers()
+    if not v then table.clear(EntityNotified) end
+end})
 
 local spawner = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Entity%20Spawner/V2/Source.lua"))()
 
-SpawnsTab:CreateButton({
-    Name = "Ripper",
-    Callback = function()
-            local killed = false
-            local Plr = game.Players.LocalPlayer
-            local ReSt = game.ReplicatedStorage
-            local val = 80
-            local events = require(game.ReplicatedStorage.ClientModules.Module_Events)
-            local cameraShaker = require(game.ReplicatedStorage.CameraShaker)
-            local camera = workspace.CurrentCamera
-    
-            local camShake = cameraShaker.new(Enum.RenderPriority.Camera.Value, function(cf)
-                camera.CFrame = camera.CFrame * cf
-            end)
-    
-            local function DEATHMESSAGE(message,who)
-                spawn(function()
-                    for i = 1,50 do wait()
-                        game:GetService("ReplicatedStorage").GameStats["Player_".. game.Players.LocalPlayer.Name].Total.DeathCause.Value = who
-                        firesignal(game.ReplicatedStorage.RemotesFolder.DeathHint.OnClientEvent, message, 'Blue')
-                    end
-                end)
-            end
-    
-            local function GetTime(Distance, Speed)
-                local Time = Distance / Speed
-                return Time
-            end
-    
-            local DEF_SPEED = 99999
-    
-            local ambruhspeed = 100
-            local storer = ambruhspeed
-            local ambushheight = Vector3.new(0,5,0)
-            local redtweeninfo = TweenInfo.new(3)
-            local redinfo = {Color = Color3.new(1, 0, 0.133333)}
-    
-            camShake:Shake(cameraShaker.Presets.Earthquake)
-            for i,v in pairs(game.Workspace.CurrentRooms:GetDescendants()) do
-                if v:IsA("Light") then
-                    game.TweenService:Create(v,redtweeninfo,redinfo):Play()
-                    if v.Parent.Name == "LightFixture" then
-                        game.TweenService:Create(v.Parent,redtweeninfo,redinfo):Play()
-                    end
-                end
-            end
-    
-            local s = game:GetObjects("rbxassetid://12272798431")[1]
-            s.Parent = workspace
-            local ambush = s.Ripe
-            ambush.Ambush.Volume = 0
-            local amb = ambush.Spawn:Clone()
-            amb.Parent = workspace
-            amb.TimePosition = 0
-            amb:Play()
-            amb.Volume = 6
-    
-            game.Debris:AddItem(amb,10)
-            ambush.Ambush:Stop()
-            local h = ambush.Ambush
-            h.SoundId = "rbxassetid://6963538865"
-            h.Volume = 10
-            h.RollOffMinDistance = 5
-            h.PlaybackSpeed = 0.37
-            h.TimePosition = 0
-            h.Volume = 10
-            wait(8)
-            ambush.Ambush:Play()
-            game.TweenService:Create(ambush.Ambush,TweenInfo.new(6),{Volume = 0.8}):Play()
-            local gruh = workspace.CurrentRooms
-            ambruhspeed = DEF_SPEED
-            
-            for i = 1, game.ReplicatedStorage.GameData.LatestRoom.Value + 1 do
-                if gruh:FindFirstChild(i) then
-                    local room = gruh[i]
-                    
-                    local waypoint = room.RoomEntrance
-                    
-                    local Distance = (ambush.Position - waypoint.Position).magnitude
-    
-                    local Tween = game.TweenService:Create(ambush, TweenInfo.new(GetTime(Distance, ambruhspeed), Enum.EasingStyle.Linear,Enum.EasingDirection.Out), { CFrame = waypoint.CFrame + ambushheight })
-                    Tween:Play()
-                    Tween.Completed:Wait()
-                end
-            end
-    
-            workspace.CurrentRooms[game.ReplicatedStorage.GameData.LatestRoom.Value]:WaitForChild("Door").ClientOpen:FireServer()
-            local slam = Instance.new("Sound",ambush)
-            slam.Volume = 10
-            slam.SoundId = "rbxassetid://1837829565"
-            camShake:Shake(cameraShaker.Presets.Explosion)
-            slam:Play()
-            wait(1)
-            ambush.Anchored = false
-            ambush.CanCollide = false
-            game.Debris:AddItem(s,5)
-    end,
-})
 
 SpawnsTab:CreateButton({
     Name = "Stupid horse",
@@ -1952,6 +3346,7 @@ local spawner = loadstring(game:HttpGet(
 		local Tween = game:GetService("TweenService"):Create(Reboundcolor, TweenInfo.new(15), {TintColor = Color3.fromRGB(255, 255, 255), Saturation = 0, Contrast = 0})
 		Tween:Play()
 		Tween.Completed:Connect(function()
+        if not LightningHaxAlive then return end
 			Reboundcolor:Destroy()
 		end)
 		CamShake:ShakeOnce(10, 3, 0.1, 6, 2, 0.5)
@@ -2152,7 +3547,50 @@ SpawnsTab:CreateButton({
 })
 
 
--- PARAGRAPH
+local SpawnCleanupNames = {
+    ["OG Ambush"]=true,["A-60"]=true,["Depth"]=true,["STUPID HORSE"]=true,["Rebound"]=true,["Ripe"]=true,
+    ["RushMoving"]=false,["AmbushMoving"]=false,["Eyes"]=false,["SeekMoving"]=false,["SeekMovingNewClone"]=false
+}
+local function DeleteCustomSpawnedEntities()
+    local removed=0
+    for _,obj in ipairs(workspace:GetChildren()) do
+        if SpawnCleanupNames[obj.Name]==true then obj:Destroy(); removed+=1 end
+    end
+    Rayfield:Notify({Title="Entity Cleanup",Content=("Removed %d custom entities."):format(removed),Duration=4})
+end
+SpawnsTab:CreateButton({Name="Delete Custom Spawned Entities",Callback=DeleteCustomSpawnedEntities})
+
+local function PreparePlushyTool(tool)
+    if not tool or not tool:IsA("Tool") or tool:GetAttribute("LightningPlushyPrepared") then return tool end
+    tool:SetAttribute("LightningPlushyPrepared", true)
+    tool.Unequipped:Connect(function()
+        if not LightningHaxAlive then return end
+        task.defer(function()
+            local character = LocalPlayer.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
+            if animator then
+                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                    local n = string.lower(track.Name or "")
+                    if track.Priority >= Enum.AnimationPriority.Action and (string.find(n,"hold",1,true) or string.find(n,"equip",1,true) or string.find(n,"plush",1,true)) then
+                        pcall(function() track:Stop(0.1) end)
+                    end
+                end
+            end
+            if character then
+                for _, limbName in ipairs({"RightHand","Right Arm"}) do
+                    local limb = character:FindFirstChild(limbName)
+                    local grip = limb and limb:FindFirstChild("RightGrip")
+                    if grip and grip:IsA("Motor6D") and grip.Part1 and grip.Part1:IsDescendantOf(tool) then
+                        grip:Destroy()
+                    end
+                end
+            end
+        end)
+    end)
+    return tool
+end
+
 PlushysTab:CreateParagraph({
     Title = "Note:",
     Content = "A-120 and Depth plushy can be executed in pre-run shop for there own section in it (Hotel-)"
@@ -2161,21 +3599,11 @@ PlushysTab:CreateParagraph({
 PlushysTab:CreateButton({
     Name = "Rush Plushy",
     Callback = function()
-     --[[
- 
- RUSH
- AMBUSH
- JACK
- DUPE
- 
- ]]--
- 
  local RushEnabled = true
  local AmbushEnabled = false
  local JackEnabled = false
  local DupeEnabled = false
  
- ---------------------------------------------------------
  
  local Players = game:GetService("Players")
  local UIS = game:GetService("UserInputService")
@@ -2184,21 +3612,25 @@ PlushysTab:CreateButton({
  
  local Rush = game:GetObjects("rbxassetid://106490395325401")[1]
  if RushEnabled then
+     PreparePlushyTool(Rush)
      Rush.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Ambush = game:GetObjects("rbxassetid://91769363360905")[1]
  if AmbushEnabled then
+     PreparePlushyTool(Ambush)
      Ambush.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Jack = game:GetObjects("rbxassetid://135816582968851")[1]
  if JackEnabled then
+     PreparePlushyTool(Jack)
      Jack.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Dupe = game:GetObjects("rbxassetid://116858052599982")[1]
  if DupeEnabled then
+     PreparePlushyTool(Dupe)
      Dupe.Parent = game.Players.LocalPlayer.Backpack
  end
     end,
@@ -2207,21 +3639,11 @@ PlushysTab:CreateButton({
 PlushysTab:CreateButton({
     Name = "Ambush Plushy",
     Callback = function()
-     --[[
- 
- RUSH
- AMBUSH
- JACK
- DUPE
- 
- ]]--
- 
  local RushEnabled = false
  local AmbushEnabled = true
  local JackEnabled = false
  local DupeEnabled = false
  
- ---------------------------------------------------------
  
  local Players = game:GetService("Players")
  local UIS = game:GetService("UserInputService")
@@ -2230,21 +3652,25 @@ PlushysTab:CreateButton({
  
  local Rush = game:GetObjects("rbxassetid://106490395325401")[1]
  if RushEnabled then
+     PreparePlushyTool(Rush)
      Rush.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Ambush = game:GetObjects("rbxassetid://91769363360905")[1]
  if AmbushEnabled then
+     PreparePlushyTool(Ambush)
      Ambush.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Jack = game:GetObjects("rbxassetid://135816582968851")[1]
  if JackEnabled then
+     PreparePlushyTool(Jack)
      Jack.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Dupe = game:GetObjects("rbxassetid://116858052599982")[1]
  if DupeEnabled then
+     PreparePlushyTool(Dupe)
      Dupe.Parent = game.Players.LocalPlayer.Backpack
  end
     end,
@@ -2253,21 +3679,11 @@ PlushysTab:CreateButton({
 PlushysTab:CreateButton({
     Name = "Dupe Plushy",
     Callback = function()
-     --[[
- 
- RUSH
- AMBUSH
- JACK
- DUPE
- 
- ]]--
- 
  local RushEnabled = false
  local AmbushEnabled = false
  local JackEnabled = false
  local DupeEnabled = true
  
- ---------------------------------------------------------
  
  local Players = game:GetService("Players")
  local UIS = game:GetService("UserInputService")
@@ -2276,21 +3692,25 @@ PlushysTab:CreateButton({
  
  local Rush = game:GetObjects("rbxassetid://106490395325401")[1]
  if RushEnabled then
+     PreparePlushyTool(Rush)
      Rush.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Ambush = game:GetObjects("rbxassetid://91769363360905")[1]
  if AmbushEnabled then
+     PreparePlushyTool(Ambush)
      Ambush.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Jack = game:GetObjects("rbxassetid://135816582968851")[1]
  if JackEnabled then
+     PreparePlushyTool(Jack)
      Jack.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Dupe = game:GetObjects("rbxassetid://116858052599982")[1]
  if DupeEnabled then
+     PreparePlushyTool(Dupe)
      Dupe.Parent = game.Players.LocalPlayer.Backpack
  end
     end,
@@ -2303,17 +3723,21 @@ PlushysTab:CreateButton({
         local hum = plr.Character:WaitForChild("Humanoid")
         
         local plush = game:GetObjects("rbxassetid://86849317933417")[1]
+        PreparePlushyTool(plush)
         plush.Parent = plr.Backpack
         local anim = hum:LoadAnimation(plush.A.Hold)
         
         plush.Equipped:Connect(function()
+        if not LightningHaxAlive then return end
             anim:Play()
         end)
         plush.Unequipped:Connect(function()
+        if not LightningHaxAlive then return end
             anim:Stop()
         end)
         
         plush.Activated:Connect(function()
+        if not LightningHaxAlive then return end
             plush.Toy:Play()
         end)
     end,
@@ -2326,17 +3750,21 @@ PlushysTab:CreateButton({
  local hum = plr.Character:WaitForChild("Humanoid")
  
  local plush = game:GetObjects("rbxassetid://13613269677")[1]
+ PreparePlushyTool(plush)
  plush.Parent = plr.Backpack
  local anim = hum:LoadAnimation(plush.A.Hold)
  
  plush.Equipped:Connect(function()
+        if not LightningHaxAlive then return end
    anim:Play()
  end)
  plush.Unequipped:Connect(function()
+        if not LightningHaxAlive then return end
    anim:Stop()
  end)
  
  plush.Activated:Connect(function()
+        if not LightningHaxAlive then return end
    plush.Toy:Play()
  end)
  
@@ -2352,9 +3780,11 @@ PlushysTab:CreateButton({
  local Char = Plr.Character or Plr.CharacterAdded:Wait()
  
  local shadow = game:GetObjects("rbxassetid://85674900664881")[1]
+ PreparePlushyTool(shadow)
  shadow.Parent = game.Players.LocalPlayer.Backpack
  
  UIS.InputBegan:Connect(function(input, gameProcessed)
+        if not LightningHaxAlive then return end
      if not gameProcessed and input.KeyCode == Enum.KeyCode.Space then
          local plushie = Char:FindFirstChild("A60")
  
@@ -2365,6 +3795,7 @@ PlushysTab:CreateButton({
  end)
  
  UIS.InputBegan:Connect(function(input, gameProcessed)
+        if not LightningHaxAlive then return end
      if not gameProcessed and input.KeyCode == Enum.KeyCode.K then
          local plushie = Char:FindFirstChild("A60")
  
@@ -2391,10 +3822,13 @@ PlushysTab:CreateButton({
  local LeftC1 = LeftArm.LeftShoulder.C1
  local A90 = game:GetObjects("rbxassetid://12544988486")[1]
  
+ PreparePlushyTool(A90)
+ 
  A90.Parent = game.Players.LocalPlayer.Backpack
  
  local function setupHands(tool)
      tool.Equipped:Connect(function()
+        if not LightningHaxAlive then return end
          Equipped = true
          Char:SetAttribute("Hiding", true)
          for _, v in next, Hum:GetPlayingAnimationTracks() do
@@ -2412,6 +3846,7 @@ PlushysTab:CreateButton({
      end)
  
      tool.Unequipped:Connect(function()
+        if not LightningHaxAlive then return end
          Equipped = false
          Char:SetAttribute("Hiding", nil)
          RightArm.Name = "RightUpperArm"
@@ -2451,10 +3886,13 @@ PlushysTab:CreateButton({
      Stack = 1,
  })
  
+ PreparePlushyTool(A120)
+ 
  A120.Parent = game.Players.LocalPlayer.Backpack
  
  local function setupHands(tool)
      tool.Equipped:Connect(function()
+        if not LightningHaxAlive then return end
          Equipped = true
          Char:SetAttribute("Hiding", true)
          for _, v in next, Hum:GetPlayingAnimationTracks() do
@@ -2472,6 +3910,7 @@ PlushysTab:CreateButton({
      end)
  
      tool.Unequipped:Connect(function()
+        if not LightningHaxAlive then return end
          Equipped = false
          Char:SetAttribute("Hiding", nil)
          RightArm.Name = "RightUpperArm"
@@ -2516,10 +3955,13 @@ PlushysTab:CreateButton({
      Stack = 1,
  })
  
+ PreparePlushyTool(Depth)
+ 
  Depth.Parent = game.Players.LocalPlayer.Backpack
  
  local function setupHands(tool)
      tool.Equipped:Connect(function()
+        if not LightningHaxAlive then return end
          Equipped = true
          Char:SetAttribute("Hiding", true)
          for _, v in next, Hum:GetPlayingAnimationTracks() do
@@ -2545,6 +3987,7 @@ PlushysTab:CreateButton({
      end)
  
      tool.Unequipped:Connect(function()
+        if not LightningHaxAlive then return end
          Equipped = false
          Char:SetAttribute("Hiding", nil)
          RightArm.Name = "RightUpperArm"
@@ -2569,15 +4012,6 @@ PlushysTab:CreateButton({
 PlushysTab:CreateButton({
     Name = "Green Blitz Plushy",
     Callback = function()
-     --[[
- 
- HASTE + DOUBLE BLITZ PLUSHIES
- 
- [K] - PLAY SOUNDS
- [SPACE] - STOP SOUNDS
- 
- ]]--
- 
  local Sounds = true
  
  local HasteEnabled = false
@@ -2587,7 +4021,6 @@ PlushysTab:CreateButton({
  local SoundKey = Enum.KeyCode.K
  local StopSoundKey = Enum.KeyCode.Space
  
- ---------------------------------------------------------
  
  local Players = game:GetService("Players")
  local UIS = game:GetService("UserInputService")
@@ -2596,16 +4029,19 @@ PlushysTab:CreateButton({
  
  local Haste = game:GetObjects("rbxassetid://109374845896295")[1]
  if HasteEnabled then
+     PreparePlushyTool(Haste)
      Haste.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Brother = game:GetObjects("rbxassetid://81472152992030")[1]
  if BrotherEnabled then
+     PreparePlushyTool(Brother)
      Brother.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Sister = game:GetObjects("rbxassetid://85239321727099")[1]
  if SisterEnabled then
+     PreparePlushyTool(Sister)
      Sister.Parent = game.Players.LocalPlayer.Backpack
  end
  
@@ -2616,6 +4052,7 @@ PlushysTab:CreateButton({
  end
  
  UIS.InputBegan:Connect(function(input, gameProcessed)
+        if not LightningHaxAlive then return end
      if not gameProcessed and input.KeyCode == StopSoundKey then
          local HastePlushie = Char:FindFirstChild(Haste.Name)
          local BrotherPlushie = Char:FindFirstChild(Brother.Name)
@@ -2636,6 +4073,7 @@ PlushysTab:CreateButton({
  end)
  
  UIS.InputBegan:Connect(function(input, gameProcessed)
+        if not LightningHaxAlive then return end
      if not gameProcessed and input.KeyCode == SoundKey then
          local HastePlushie = Char:FindFirstChild(Haste.Name)
          local BrotherPlushie = Char:FindFirstChild(Brother.Name)
@@ -2660,15 +4098,6 @@ PlushysTab:CreateButton({
 PlushysTab:CreateButton({
     Name = "Pink Blitz Plushy",
     Callback = function()
-     --[[
- 
- HASTE + DOUBLE BLITZ PLUSHIES
- 
- [K] - PLAY SOUNDS
- [SPACE] - STOP SOUNDS
- 
- ]]--
- 
  local Sounds = true
  
  local HasteEnabled = false
@@ -2678,7 +4107,6 @@ PlushysTab:CreateButton({
  local SoundKey = Enum.KeyCode.K
  local StopSoundKey = Enum.KeyCode.Space
  
- ---------------------------------------------------------
  
  local Players = game:GetService("Players")
  local UIS = game:GetService("UserInputService")
@@ -2687,16 +4115,19 @@ PlushysTab:CreateButton({
  
  local Haste = game:GetObjects("rbxassetid://109374845896295")[1]
  if HasteEnabled then
+     PreparePlushyTool(Haste)
      Haste.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Brother = game:GetObjects("rbxassetid://81472152992030")[1]
  if BrotherEnabled then
+     PreparePlushyTool(Brother)
      Brother.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Sister = game:GetObjects("rbxassetid://85239321727099")[1]
  if SisterEnabled then
+     PreparePlushyTool(Sister)
      Sister.Parent = game.Players.LocalPlayer.Backpack
  end
  
@@ -2707,6 +4138,7 @@ PlushysTab:CreateButton({
  end
  
  UIS.InputBegan:Connect(function(input, gameProcessed)
+        if not LightningHaxAlive then return end
      if not gameProcessed and input.KeyCode == StopSoundKey then
          local HastePlushie = Char:FindFirstChild(Haste.Name)
          local BrotherPlushie = Char:FindFirstChild(Brother.Name)
@@ -2727,6 +4159,7 @@ PlushysTab:CreateButton({
  end)
  
  UIS.InputBegan:Connect(function(input, gameProcessed)
+        if not LightningHaxAlive then return end
      if not gameProcessed and input.KeyCode == SoundKey then
          local HastePlushie = Char:FindFirstChild(Haste.Name)
          local BrotherPlushie = Char:FindFirstChild(Brother.Name)
@@ -2751,15 +4184,6 @@ PlushysTab:CreateButton({
 PlushysTab:CreateButton({
     Name = "Haste Plushy",
     Callback = function()
-     --[[
- 
- HASTE + DOUBLE BLITZ PLUSHIES
- 
- [K] - PLAY SOUNDS
- [SPACE] - STOP SOUNDS
- 
- ]]--
- 
  local Sounds = true
  
  local HasteEnabled = true
@@ -2769,7 +4193,6 @@ PlushysTab:CreateButton({
  local SoundKey = Enum.KeyCode.K
  local StopSoundKey = Enum.KeyCode.Space
  
- ---------------------------------------------------------
  
  local Players = game:GetService("Players")
  local UIS = game:GetService("UserInputService")
@@ -2778,16 +4201,19 @@ PlushysTab:CreateButton({
  
  local Haste = game:GetObjects("rbxassetid://109374845896295")[1]
  if HasteEnabled then
+     PreparePlushyTool(Haste)
      Haste.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Brother = game:GetObjects("rbxassetid://81472152992030")[1]
  if BrotherEnabled then
+     PreparePlushyTool(Brother)
      Brother.Parent = game.Players.LocalPlayer.Backpack
  end
  
  local Sister = game:GetObjects("rbxassetid://85239321727099")[1]
  if SisterEnabled then
+     PreparePlushyTool(Sister)
      Sister.Parent = game.Players.LocalPlayer.Backpack
  end
  
@@ -2798,6 +4224,7 @@ PlushysTab:CreateButton({
  end
  
  UIS.InputBegan:Connect(function(input, gameProcessed)
+        if not LightningHaxAlive then return end
      if not gameProcessed and input.KeyCode == StopSoundKey then
          local HastePlushie = Char:FindFirstChild(Haste.Name)
          local BrotherPlushie = Char:FindFirstChild(Brother.Name)
@@ -2818,6 +4245,7 @@ PlushysTab:CreateButton({
  end)
  
  UIS.InputBegan:Connect(function(input, gameProcessed)
+        if not LightningHaxAlive then return end
      if not gameProcessed and input.KeyCode == SoundKey then
          local HastePlushie = Char:FindFirstChild(Haste.Name)
          local BrotherPlushie = Char:FindFirstChild(Brother.Name)
@@ -2843,6 +4271,7 @@ PlushysTab:CreateButton({
     Name = "Jeff The Killer Plushy",
     Callback = function()
      local tool = game:GetObjects("rbxassetid://13069619857")[1]
+       PreparePlushyTool(tool)
        tool.Parent = game.Players.LocalPlayer.Backpack
     end,
  })
@@ -2854,19 +4283,9 @@ PlushysTab:CreateButton({
     end,
  })
 
--- PARAGRAPH
-ExtraTab:CreateParagraph({
-    Title = "Note:",
-    Content = "Credits to Kodbol for helping me"
-}) 
+UtilitiesTab:CreateSection("Developer Tools")
 
---======================================================
--- TOOLS
---======================================================
-
-Tools:CreateSection("Developer Tools")
-
-Tools:CreateButton({
+UtilitiesTab:CreateButton({
     Name = "Infinite Yield",
 
     Callback = function()
@@ -2891,7 +4310,7 @@ Tools:CreateButton({
     end
 })
 
-Tools:CreateButton({
+UtilitiesTab:CreateButton({
     Name = "Dex Explorer ++",
 
     Callback = function()
@@ -2917,7 +4336,7 @@ Tools:CreateButton({
     end
 })
 
-Tools:CreateButton({
+UtilitiesTab:CreateButton({
     Name = "SimpleSpy",
 
     Callback = function()
@@ -2942,7 +4361,7 @@ Tools:CreateButton({
     end
 })
 
-Tools:CreateButton({
+UtilitiesTab:CreateButton({
     Name = "RemoteSpy",
 
     Callback = function()
@@ -2967,7 +4386,7 @@ Tools:CreateButton({
     end
 })
 
-Tools:CreateButton({
+UtilitiesTab:CreateButton({
     Name = "Reset Character",
 
     Callback = function()
@@ -2983,7 +4402,7 @@ Tools:CreateButton({
     end
 })
 
-Tools:CreateButton({
+UtilitiesTab:CreateButton({
     Name = "Rejoin Server",
 
     Callback = function()
@@ -2995,7 +4414,7 @@ Tools:CreateButton({
     end
 })
 
-Tools:CreateButton({
+UtilitiesTab:CreateButton({
     Name = "Open Developer Console",
 
     Callback = function()
@@ -3009,8 +4428,69 @@ Tools:CreateButton({
     end
 })
 
---======================================================
--- DEBUG
---======================================================
+
+UtilitiesTab:CreateButton({
+    Name = "Unload lightninghax",
+    Callback = function()
+        LightningHaxAlive = false
+
+        DoorESPEnabled = false
+        ChestESPEnabled = false
+        ItemESPEnabled = false
+        ObjectiveESPEnabled = false
+        PlayerESPEnabled = false
+        EntityESPEnabled = false
+
+        pcall(function() SetScreechDisabled(false) end)
+        pcall(function() SetFullbrightNoFog(false) end)
+        pcall(function() SetDupeDisabled(false) end)
+
+        for room in pairs(DoorCollisionBackup) do
+            pcall(function() RestoreDoorCollision(room) end)
+        end
+
+        for _,obj in ipairs(workspace:GetDescendants()) do
+            if obj.Name=="LightningDoubleDoorESPAnchor" then
+                obj:Destroy()
+            elseif obj:IsA("Highlight") and (
+                obj.Name=="RealDoorESP" or obj.Name=="RealDoorCrossFill" or
+                obj.Name=="DoorESP" or obj.Name=="ChestESP" or obj.Name=="ItemESP" or
+                obj.Name=="ObjectiveESP" or obj.Name=="FigureESP" or
+                obj.Name=="PlayerESP"
+            ) then
+                obj:Destroy()
+            elseif obj.Name=="RealDoorOuterBorder" or
+                   obj.Name=="RealDoorESPLabel" or obj.Name=="ChestESPLabel" or
+                   obj.Name=="ItemESPLabel" or obj.Name=="ObjectiveESPLabel" or
+                   obj.Name=="EntityESPLabel" or obj.Name=="PlayerESPLabel" then
+                obj:Destroy()
+            end
+        end
+
+        for _,gui in pairs(EntityBillboards) do
+            if gui and gui.Parent then gui:Destroy() end
+        end
+        table.clear(EntityBillboards)
+
+        for player,gui in pairs(PlayerESPObjects) do
+            if gui and gui.Parent then gui:Destroy() end
+            PlayerESPObjects[player]=nil
+        end
+
+        for hitbox,transparency in pairs(FigureHitboxTransparency) do
+            if hitbox and hitbox.Parent then hitbox.Transparency=transparency end
+            FigureHitboxTransparency[hitbox]=nil
+        end
+
+        pcall(function()
+            if Rayfield.Destroy then
+                Rayfield:Destroy()
+            elseif Rayfield.DestroyWindow then
+                Rayfield:DestroyWindow()
+            end
+        end)
+    end
+})
+
 
 Rayfield:LoadConfiguration()
