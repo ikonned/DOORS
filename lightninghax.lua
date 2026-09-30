@@ -570,274 +570,351 @@ HomeTab:CreateButton({
         local ReplicatedStorage = game:GetService("ReplicatedStorage")
         local RunService = game:GetService("RunService")
 
-        local Plr = Players.LocalPlayer
-        local Character = Plr.Character or Plr.CharacterAdded:Wait()
-
-        local CurrentRooms = workspace:WaitForChild("CurrentRooms", 30)
-        if not CurrentRooms then
-            warn("Pink Tablet: CurrentRooms was not found.")
-            return
-        end
-
-        local Objects = game:GetObjects("rbxassetid://12501464609")
-        local Assets = Objects and Objects[1]
-
-        if not Assets then
-            warn("Pink Tablet: Failed to load asset 12501464609.")
-            return
-        end
-
-        Assets.Parent = ReplicatedStorage
-
-        local Scanner = Assets:FindFirstChild("CrystalScanner")
-        local UI = Assets:FindFirstChild("ScreenUICrystal")
-
-        if not Scanner or not UI then
-            warn("Pink Tablet: CrystalScanner or ScreenUICrystal is missing.")
-            return
-        end
-
-        local OffS = UI:FindFirstChild("OffScreen")
-
-        if not OffS then
-            warn("Pink Tablet: OffScreen is missing.")
-            return
-        end
-
-        local ItemsToRemove = {}
-        local Stars = {}
-        local Connections = {}
-
-        local State = false
-        local CanUse = true
-
-        local TabletID = math.random(1, 999999999)
+        local Player = Players.LocalPlayer
+        local Character = Player.Character or Player.CharacterAdded:Wait()
 
         local function GetCharacter()
-            Character = Plr.Character or Plr.CharacterAdded:Wait()
+            Character = Player.Character or Player.CharacterAdded:Wait()
             return Character
         end
 
         local function GetHumanoid()
-            local char = GetCharacter()
-            return char:FindFirstChildOfClass("Humanoid")
+            local Char = GetCharacter()
+            return Char:FindFirstChildOfClass("Humanoid")
         end
 
-        local function GetObjectPosition(Object)
-            if not Object then
-                return nil
-            end
+        local function DebugError(where, err)
+            warn("[Pink Tablet] " .. where .. ": " .. tostring(err))
 
-            if Object:IsA("BasePart") then
-                return Object.Position
-            end
-
-            if Object:IsA("Model") then
-                return Object:GetPivot().Position
-            end
-
-            return nil
+            pcall(function()
+                Rayfield:Notify({
+                    Title = "Pink Tablet Error",
+                    Content = tostring(err),
+                    Duration = 8,
+                    Image = 4483362458
+                })
+            end)
         end
 
-        local function MarkObjectWithStar(Object)
-            if not Object or not Object.Parent then
-                return nil
+        local Success, ErrorMessage = xpcall(function()
+
+            local CurrentRooms = workspace:WaitForChild("CurrentRooms", 30)
+
+            if not CurrentRooms then
+                error("CurrentRooms was not found.")
             end
 
-            local Position = GetObjectPosition(Object)
-            if not Position then
-                return nil
+            --------------------------------------------------
+            -- LOAD ASSET
+            --------------------------------------------------
+
+            local Objects = game:GetObjects("rbxassetid://12501464609")
+
+            if not Objects or #Objects == 0 then
+                error("GetObjects returned no objects for asset 12501464609.")
             end
+
+            local Assets = Objects[1]
+
+            if not Assets then
+                error("The Pink Tablet asset is nil.")
+            end
+
+            Assets = Assets:Clone()
+            Assets.Name = "PinkTabletAssets"
+
+            -- Keep a copy in ReplicatedStorage for the star/template objects.
+            Assets.Parent = ReplicatedStorage
+
+            local Scanner = Assets:FindFirstChild("CrystalScanner")
+            local UI = Assets:FindFirstChild("ScreenUICrystal")
+
+            if not Scanner then
+                error("CrystalScanner was not found inside the asset.")
+            end
+
+            if not UI then
+                error("ScreenUICrystal was not found inside the asset.")
+            end
+
+            --------------------------------------------------
+            -- REQUIRED UI OBJECTS
+            --------------------------------------------------
+
+            local ViewNormal = UI:FindFirstChild("ViewNormal")
+            local ViewSpecial = UI:FindFirstChild("ViewSpecial")
+            local OffScreen = UI:FindFirstChild("OffScreen")
+            local Static1 = UI:FindFirstChild("Static1")
+            local Static2 = UI:FindFirstChild("Static2")
+            local Camera = UI:FindFirstChild("Camera")
+
+            if not ViewNormal then
+                error("ViewNormal is missing.")
+            end
+
+            if not ViewSpecial then
+                error("ViewSpecial is missing.")
+            end
+
+            if not OffScreen then
+                error("OffScreen is missing.")
+            end
+
+            if not Static1 then
+                error("Static1 is missing.")
+            end
+
+            if not Static2 then
+                error("Static2 is missing.")
+            end
+
+            if not Camera then
+                error("Camera is missing.")
+            end
+
+            --------------------------------------------------
+            -- REQUIRED SCANNER OBJECTS
+            --------------------------------------------------
+
+            local Handle = Scanner:FindFirstChild("Handle")
+
+            if not Handle then
+                error("Scanner Handle is missing.")
+            end
+
+            local Screen = Handle:FindFirstChild("Screen")
+
+            if not Screen then
+                error("Scanner Handle.Screen is missing.")
+            end
+
+            --------------------------------------------------
+            -- STATE
+            --------------------------------------------------
+
+            local ItemsToRemove = {}
+            local Stars = {}
+            local Connections = {}
+
+            local State = false
+            local CanUse = true
+
+            local TabletID = tostring(math.random(100000, 999999999))
+
+            --------------------------------------------------
+            -- STAR
+            --------------------------------------------------
 
             local StarTemplate = Assets:FindFirstChild("Star")
-            if not StarTemplate then
-                warn("Pink Tablet: Star asset is missing.")
+
+            local function GetObjectPosition(Object)
+                if not Object then
+                    return nil
+                end
+
+                if Object:IsA("BasePart") then
+                    return Object.Position
+                end
+
+                if Object:IsA("Model") then
+                    return Object:GetPivot().Position
+                end
+
                 return nil
             end
 
-            local NewStar = StarTemplate:Clone()
-            NewStar.Parent = UI.ViewSpecial
-
-            if NewStar:IsA("BasePart") then
-                NewStar.Position = Position
-                NewStar.Color = Color3.new(1, 1, 1)
-            elseif NewStar:IsA("Model") then
-                NewStar:PivotTo(CFrame.new(Position))
-            end
-
-            table.insert(Stars, NewStar)
-
-            local DestroyConnection
-            DestroyConnection = Object.Destroying:Connect(function()
-                if DestroyConnection then
-                    DestroyConnection:Disconnect()
-                    DestroyConnection = nil
+            local function RemoveStar(Star)
+                if not Star then
+                    return
                 end
 
-                local Index = table.find(Stars, NewStar)
+                local Index = table.find(Stars, Star)
+
                 if Index then
                     table.remove(Stars, Index)
                 end
 
-                if NewStar and NewStar.Parent then
+                if Star.Parent then
                     pcall(function()
-                        if NewStar:IsA("BasePart") then
-                            TweenService:Create(
-                                NewStar,
-                                TweenInfo.new(
-                                    1,
-                                    Enum.EasingStyle.Quad,
-                                    Enum.EasingDirection.Out
-                                ),
-                                {
-                                    Transparency = 1
-                                }
-                            ):Play()
-                        end
+                        TweenService:Create(
+                            Star,
+                            TweenInfo.new(
+                                1,
+                                Enum.EasingStyle.Quad,
+                                Enum.EasingDirection.Out
+                            ),
+                            {
+                                Transparency = 1
+                            }
+                        ):Play()
                     end)
 
                     task.delay(1, function()
-                        if NewStar and NewStar.Parent then
-                            NewStar:Destroy()
+                        if Star and Star.Parent then
+                            Star:Destroy()
                         end
                     end)
                 end
-            end)
-
-            return NewStar
-        end
-
-        local function MoveRoomToViewport(Room)
-            if not Room or not Room.Parent then
-                return
             end
 
-            local Clone
+            local function MarkObjectWithStar(Object)
 
-            local Success, ErrorMessage = pcall(function()
-                Clone = Room:Clone()
-            end)
-
-            if not Success or not Clone then
-                warn("Pink Tablet: Failed to clone room:", ErrorMessage)
-                return
-            end
-
-            for _, v in ipairs(Clone:GetDescendants()) do
-                if v:IsA("Highlight")
-                    or v:IsA("BoxHandleAdornment")
-                    or v:IsA("BillboardGui")
-                    or v:IsA("Sound")
-                    or string.find(v.Name, "ESP", 1, true)
-                then
-                    v:Destroy()
+                if not StarTemplate then
+                    warn("[Pink Tablet] Star template missing.")
+                    return nil
                 end
-            end
 
-            Clone.Parent = UI.ViewNormal
-            table.insert(ItemsToRemove, Clone)
-        end
+                local Position = GetObjectPosition(Object)
 
-        local function MarkObject(Object, Prompt)
-            if not Object or not Object.Parent then
-                return
-            end
+                if not Position then
+                    return nil
+                end
 
-            local AttributeName = "TabletMark_" .. TabletID
+                local Star = StarTemplate:Clone()
 
-            if Object:GetAttribute(AttributeName) then
-                return
-            end
+                if not Star:IsA("BasePart") then
+                    warn("[Pink Tablet] Star isn't a BasePart.")
+                    Star:Destroy()
+                    return nil
+                end
 
-            local Star = MarkObjectWithStar(Object)
+                Star.CFrame = CFrame.new(Position)
+                Star.Color = Color3.new(1, 1, 1)
+                Star.Parent = ViewSpecial
 
-            if not Star then
-                Object:SetAttribute(AttributeName, true)
-                return
-            end
+                table.insert(Stars, Star)
 
-            if Prompt and Prompt:IsA("ProximityPrompt") then
                 local Connection
 
-                Connection = Prompt.Triggered:Connect(function()
-                    if not LightningHaxAlive then
-                        if Connection then
-                            Connection:Disconnect()
-                        end
-                        return
-                    end
+                Connection = Object.Destroying:Connect(function()
 
                     if Connection then
                         Connection:Disconnect()
                         Connection = nil
                     end
 
-                    if Star and Star.Parent then
-                        pcall(function()
-                            if Star:IsA("BasePart") then
-                                TweenService:Create(
-                                    Star,
-                                    TweenInfo.new(
-                                        1,
-                                        Enum.EasingStyle.Quad,
-                                        Enum.EasingDirection.Out
-                                    ),
-                                    {
-                                        Transparency = 1
-                                    }
-                                ):Play()
-                            end
-                        end)
+                    RemoveStar(Star)
+                end)
 
-                        task.delay(1, function()
-                            if Star and Star.Parent then
-                                Star:Destroy()
-                            end
-                        end)
+                table.insert(Connections, Connection)
+
+                return Star
+            end
+
+            --------------------------------------------------
+            -- ROOM CLONING
+            --------------------------------------------------
+
+            local function MoveRoomToViewport(Room)
+
+                if not Room or not Room.Parent then
+                    return
+                end
+
+                local Clone = Room:Clone()
+
+                for _, Object in ipairs(Clone:GetDescendants()) do
+
+                    if Object:IsA("Highlight")
+                        or Object:IsA("BoxHandleAdornment")
+                        or Object:IsA("BillboardGui")
+                        or Object:IsA("Sound")
+                        or string.find(Object.Name, "ESP", 1, true)
+                    then
+                        Object:Destroy()
                     end
+
+                end
+
+                Clone.Parent = ViewNormal
+
+                table.insert(ItemsToRemove, Clone)
+            end
+
+            --------------------------------------------------
+            -- MARK PROMPTS
+            --------------------------------------------------
+
+            local function MarkObject(Object, Prompt)
+
+                if not Object or not Object.Parent then
+                    return
+                end
+
+                local AttributeName = "PinkTablet_" .. TabletID
+
+                if Object:GetAttribute(AttributeName) then
+                    return
+                end
+
+                local Star = MarkObjectWithStar(Object)
+
+                Object:SetAttribute(AttributeName, true)
+
+                if not Star then
+                    return
+                end
+
+                if Prompt and Prompt:IsA("ProximityPrompt") then
+
+                    local Connection
+
+                    Connection = Prompt.Triggered:Connect(function()
+
+                        if not LightningHaxAlive then
+                            if Connection then
+                                Connection:Disconnect()
+                            end
+                            return
+                        end
+
+                        if Connection then
+                            Connection:Disconnect()
+                            Connection = nil
+                        end
+
+                        RemoveStar(Star)
+                    end)
+
+                    table.insert(Connections, Connection)
+                end
+
+                local Connection
+
+                Connection = Object.Destroying:Connect(function()
+
+                    if Connection then
+                        Connection:Disconnect()
+                        Connection = nil
+                    end
+
+                    RemoveStar(Star)
                 end)
 
                 table.insert(Connections, Connection)
             end
 
-            local DestroyConnection
+            --------------------------------------------------
+            -- STATIC ON
+            --------------------------------------------------
 
-            DestroyConnection = Object.Destroying:Connect(function()
-                if DestroyConnection then
-                    DestroyConnection:Disconnect()
-                    DestroyConnection = nil
+            local function DisplayStatic()
+
+                local UseSound = Handle:FindFirstChild("Use")
+
+                if UseSound then
+                    UseSound:Play()
                 end
 
-                if Star and Star.Parent then
-                    Star:Destroy()
-                end
-            end)
+                OffScreen.Visible = false
 
-            table.insert(Connections, DestroyConnection)
-
-            Object:SetAttribute(AttributeName, true)
-        end
-
-        local function DisplayStatic()
-            local Handle = Scanner:FindFirstChild("Handle")
-            if not Handle then
-                return
-            end
-
-            local UseSound = Handle:FindFirstChild("Use")
-            if UseSound then
-                UseSound:Play()
-            end
-
-            local Static2 = UI:FindFirstChild("Static2")
-            local ViewSpecial = UI:FindFirstChild("ViewSpecial")
-
-            if Static2 then
+                Static1.ImageTransparency = 0
                 Static2.ImageTransparency = 0
-            end
 
-            if ViewSpecial and ViewSpecial:IsA("ImageLabel") then
                 ViewSpecial.ImageTransparency = 1
+
+                ViewSpecial.ImageColor3 =
+                    Color3.fromRGB(217, 255, 206)
 
                 TweenService:Create(
                     ViewSpecial,
@@ -850,9 +927,7 @@ HomeTab:CreateButton({
                         ImageTransparency = 0
                     }
                 ):Play()
-            end
 
-            if Static2 then
                 TweenService:Create(
                     Static2,
                     TweenInfo.new(
@@ -865,390 +940,475 @@ HomeTab:CreateButton({
                     }
                 ):Play()
             end
-        end
 
-        local function TurnOffAnimation()
-            local Handle = Scanner:FindFirstChild("Handle")
+            --------------------------------------------------
+            -- STATIC OFF
+            --------------------------------------------------
 
-            if Handle then
+            local function TurnOffAnimation()
+
                 local DisableSound = Handle:FindFirstChild("Disable")
+
                 if DisableSound then
                     DisableSound:Play()
                 end
-            end
 
-            local Frame = OffS:FindFirstChild("Frame")
-            if not Frame then
-                return
-            end
+                local Frame = OffScreen:FindFirstChild("Frame")
 
-            OffS.Visible = true
-            Frame.Size = UDim2.fromScale(1, 1)
+                if not Frame then
+                    return
+                end
 
-            TweenService:Create(
-                Frame,
-                TweenInfo.new(
-                    0.5,
-                    Enum.EasingStyle.Quad,
-                    Enum.EasingDirection.Out
-                ),
-                {
-                    Size = UDim2.fromScale(1, 0.1)
-                }
-            ):Play()
+                OffScreen.Visible = true
 
-            task.wait(0.5)
+                Frame.Size = UDim2.fromScale(1, 1)
 
-            if Frame and Frame.Parent then
                 TweenService:Create(
                     Frame,
                     TweenInfo.new(
                         0.5,
                         Enum.EasingStyle.Quad,
-                        Enum.EasingDirection.InOut
+                        Enum.EasingDirection.Out
                     ),
                     {
-                        Size = UDim2.fromScale(0, 0.1)
+                        Size = UDim2.fromScale(1, 0.1)
                     }
                 ):Play()
-            end
-        end
 
-        local function CameraStaticMover(Static)
-            if not Static then
-                return
-            end
+                task.wait(0.5)
 
-            local RNG = math.random(-100, 100)
-            local RNG1 = math.random(-100, 100)
-
-            Static.Position = UDim2.new(
-                0.5,
-                RNG,
-                0.5,
-                RNG1
-            )
-        end
-
-        local function Update()
-            if not LightningHaxAlive then
-                return
-            end
-
-            local RoomId = Plr:GetAttribute("CurrentRoom")
-
-            if RoomId == nil then
-                return
-            end
-
-            RoomId = tonumber(RoomId)
-
-            if not RoomId then
-                warn("Pink Tablet: CurrentRoom is not a number.")
-                return
-            end
-
-            local CurrentRoom = CurrentRooms:FindFirstChild(tostring(RoomId))
-
-            if not CurrentRoom then
-                warn("Pink Tablet: Current room not found:", RoomId)
-                return
-            end
-
-            for _, v in ipairs(ItemsToRemove) do
-                if v and v.Parent then
-                    v:Destroy()
+                if Frame and Frame.Parent then
+                    TweenService:Create(
+                        Frame,
+                        TweenInfo.new(
+                            0.5,
+                            Enum.EasingStyle.Quad,
+                            Enum.EasingDirection.InOut
+                        ),
+                        {
+                            Size = UDim2.fromScale(0, 0.1)
+                        }
+                    ):Play()
                 end
             end
 
-            table.clear(ItemsToRemove)
+            --------------------------------------------------
+            -- CAMERA STATIC
+            --------------------------------------------------
 
-            -- Previous room
-            local PreviousRoom =
-                CurrentRooms:FindFirstChild(tostring(RoomId - 1))
+            local function CameraStaticMover(Object)
 
-            if PreviousRoom then
-                MoveRoomToViewport(PreviousRoom)
+                if not Object then
+                    return
+                end
+
+                Object.Position = UDim2.new(
+                    0.5,
+                    math.random(-100, 100),
+                    0.5,
+                    math.random(-100, 100)
+                )
             end
 
-            -- Current room
-            MoveRoomToViewport(CurrentRoom)
+            --------------------------------------------------
+            -- UPDATE TABLET
+            --------------------------------------------------
 
-            -- Next room
-            local NextRoom =
-                CurrentRooms:FindFirstChild(tostring(RoomId + 1))
+            local function Update()
 
-            if NextRoom then
-                MoveRoomToViewport(NextRoom)
-            end
+                if not LightningHaxAlive then
+                    return
+                end
 
-            local ToFind = {
-                "LeverForGate"
-            }
+                local RoomId = Player:GetAttribute("CurrentRoom")
 
-            -- Replaces invalid QueryDescendants()
-            for _, v in ipairs(CurrentRoom:GetDescendants()) do
-                if v:IsA("ProximityPrompt") then
+                if RoomId == nil then
+                    return
+                end
+
+                RoomId = tonumber(RoomId)
+
+                if not RoomId then
+                    warn("[Pink Tablet] Invalid CurrentRoom:", RoomId)
+                    return
+                end
+
+                local CurrentRoom =
+                    CurrentRooms:FindFirstChild(tostring(RoomId))
+
+                if not CurrentRoom then
+                    return
+                end
+
+                --------------------------------------------------
+                -- CLEAN OLD ROOMS
+                --------------------------------------------------
+
+                for _, Object in ipairs(ItemsToRemove) do
+                    if Object and Object.Parent then
+                        Object:Destroy()
+                    end
+                end
+
+                table.clear(ItemsToRemove)
+
+                --------------------------------------------------
+                -- PREVIOUS
+                --------------------------------------------------
+
+                local PreviousRoom =
+                    CurrentRooms:FindFirstChild(tostring(RoomId - 1))
+
+                if PreviousRoom then
+                    MoveRoomToViewport(PreviousRoom)
+                end
+
+                --------------------------------------------------
+                -- CURRENT
+                --------------------------------------------------
+
+                MoveRoomToViewport(CurrentRoom)
+
+                --------------------------------------------------
+                -- NEXT
+                --------------------------------------------------
+
+                local NextRoom =
+                    CurrentRooms:FindFirstChild(tostring(RoomId + 1))
+
+                if NextRoom then
+                    MoveRoomToViewport(NextRoom)
+                end
+
+                --------------------------------------------------
+                -- PROMPTS
+                --------------------------------------------------
+
+                local ToFind = {
+                    "LeverForGate"
+                }
+
+                -- QueryDescendants is supported, so keep it.
+                for _, Prompt in ipairs(
+                    CurrentRoom:QueryDescendants("ProximityPrompt")
+                ) do
+
                     local Ancestor =
-                        v:FindFirstAncestorWhichIsA("Model")
+                        Prompt:FindFirstAncestorWhichIsA("Model")
 
                     if Ancestor then
-                        if v.Name == "ModulePrompt"
-                            or v.Name == "HidingPrompt"
+
+                        if Prompt.Name == "ModulePrompt"
+                            or Prompt.Name == "HidingPrompt"
                             or table.find(ToFind, Ancestor.Name)
                         then
-                            MarkObject(Ancestor, v)
+                            MarkObject(Ancestor, Prompt)
                         end
+
                     end
                 end
             end
-        end
 
-        local Handle = Scanner:FindFirstChild("Handle")
-        local Screen = Handle and Handle:FindFirstChild("Screen")
-        local SurfaceLight = Screen and Screen:FindFirstChild("SurfaceLight")
+            --------------------------------------------------
+            -- LIGHT
+            --------------------------------------------------
 
-        local OGLight = 0
+            local SurfaceLight =
+                Screen:FindFirstChildOfClass("SurfaceLight")
 
-        if SurfaceLight then
-            OGLight = SurfaceLight.Brightness
-        end
+            local OriginalBrightness =
+                SurfaceLight and SurfaceLight.Brightness or 0
 
-        local function On()
-            if State then
-                return
-            end
+            --------------------------------------------------
+            -- ON
+            --------------------------------------------------
 
-            DisplayStatic()
-            OffS.Visible = false
+            local function On()
 
-            if SurfaceLight then
-                TweenService:Create(
-                    SurfaceLight,
-                    TweenInfo.new(
-                        0.5,
-                        Enum.EasingStyle.Quad,
-                        Enum.EasingDirection.InOut
-                    ),
-                    {
-                        Brightness = OGLight
-                    }
-                ):Play()
-            end
+                if State then
+                    return
+                end
 
-            State = true
+                DisplayStatic()
 
-            Update()
+                if SurfaceLight then
+                    TweenService:Create(
+                        SurfaceLight,
+                        TweenInfo.new(
+                            0.5,
+                            Enum.EasingStyle.Quad,
+                            Enum.EasingDirection.InOut
+                        ),
+                        {
+                            Brightness = OriginalBrightness
+                        }
+                    ):Play()
+                end
 
-            if Connections.CurrentRoomChanged then
-                Connections.CurrentRoomChanged:Disconnect()
-                Connections.CurrentRoomChanged = nil
-            end
+                State = true
 
-            Connections.CurrentRoomChanged =
-                Plr:GetAttributeChangedSignal("CurrentRoom"):Connect(function()
-                    if not LightningHaxAlive then
-                        return
-                    end
+                Update()
 
-                    if State then
-                        DisplayStatic()
-                        Update()
-                    end
-                end)
+                if Connections.CurrentRoomChanged then
+                    Connections.CurrentRoomChanged:Disconnect()
+                end
 
-            task.spawn(function()
-                while State and LightningHaxAlive do
-                    RunService.PreRender:Wait()
+                Connections.CurrentRoomChanged =
+                    Player:GetAttributeChangedSignal(
+                        "CurrentRoom"
+                    ):Connect(function()
 
-                    if not State or not LightningHaxAlive then
-                        break
-                    end
+                        if not LightningHaxAlive then
+                            return
+                        end
 
-                    if Handle and Handle.Parent then
-                        for _, v in ipairs(Stars) do
-                            if v and v.Parent then
-                                if v:IsA("BasePart") then
-                                    v.CFrame = CFrame.lookAt(
-                                        v.Position,
+                        if State then
+                            DisplayStatic()
+                            Update()
+                        end
+                    end)
+
+                task.spawn(function()
+
+                    while State and LightningHaxAlive do
+
+                        RunService.PreRender:Wait()
+
+                        if not State then
+                            break
+                        end
+
+                        --------------------------------------------------
+                        -- STAR ROTATION
+                        --------------------------------------------------
+
+                        for _, Star in ipairs(Stars) do
+
+                            if Star
+                                and Star.Parent
+                                and Star:IsA("BasePart")
+                            then
+
+                                Star.CFrame =
+                                    CFrame.lookAt(
+                                        Star.Position,
                                         Handle.Position
                                     )
-                                elseif v:IsA("Model") then
-                                    local Pivot = v:GetPivot()
-                                    v:PivotTo(
-                                        CFrame.lookAt(
-                                            Pivot.Position,
-                                            Handle.Position
-                                        )
-                                    )
-                                end
                             end
+
                         end
-                    end
 
-                    local Static1 = UI:FindFirstChild("Static1")
-                    local Static2 = UI:FindFirstChild("Static2")
+                        --------------------------------------------------
+                        -- STATIC
+                        --------------------------------------------------
 
-                    if Static1 then
                         CameraStaticMover(Static1)
-                    end
-
-                    if Static2 then
                         CameraStaticMover(Static2)
-                    end
 
-                    local Camera = UI:FindFirstChild("Camera")
+                        --------------------------------------------------
+                        -- CAMERA
+                        --------------------------------------------------
 
-                    if Camera and Handle and Handle.Parent and Screen then
                         Camera.CFrame =
                             Screen.CFrame
                             * CFrame.Angles(0, math.rad(180), 0)
                             * CFrame.new(0, 0, -0.3)
                     end
+                end)
+            end
+
+            --------------------------------------------------
+            -- OFF
+            --------------------------------------------------
+
+            local function Off()
+
+                if not State then
+                    return
                 end
-            end)
-        end
 
-        local function Off()
-            if not State then
-                return
-            end
+                task.spawn(function()
+                    TurnOffAnimation()
+                end)
 
-            task.spawn(function()
-                TurnOffAnimation()
-            end)
+                if SurfaceLight then
 
-            if SurfaceLight then
-                TweenService:Create(
-                    SurfaceLight,
-                    TweenInfo.new(
-                        0.5,
-                        Enum.EasingStyle.Quad,
-                        Enum.EasingDirection.InOut
-                    ),
-                    {
-                        Brightness = 0
-                    }
-                ):Play()
-            end
+                    TweenService:Create(
+                        SurfaceLight,
+                        TweenInfo.new(
+                            0.5,
+                            Enum.EasingStyle.Quad,
+                            Enum.EasingDirection.InOut
+                        ),
+                        {
+                            Brightness = 0
+                        }
+                    ):Play()
 
-            for _, Connection in pairs(Connections) do
-                if typeof(Connection) == "RBXScriptConnection" then
-                    pcall(function()
-                        Connection:Disconnect()
-                    end)
                 end
-            end
 
-            table.clear(Connections)
+                for _, Connection in pairs(Connections) do
 
-            State = false
-        end
+                    if typeof(Connection) == "RBXScriptConnection" then
+                        pcall(function()
+                            Connection:Disconnect()
+                        end)
+                    end
 
-        local function OffUnequip()
-            if not LightningHaxAlive then
-                return
-            end
-
-            SetTabletESPMode(false)
-
-            UI.Enabled = false
-
-            if UI.ViewNormal then
-                UI.ViewNormal.CurrentCamera = nil
-            end
-
-            if UI.ViewSpecial then
-                UI.ViewSpecial.CurrentCamera = nil
-            end
-
-            Off()
-        end
-
-        local function OnEquip()
-            if not LightningHaxAlive then
-                return
-            end
-
-            SetTabletESPMode(true)
-
-            UI.Enabled = true
-
-            local Camera = UI:FindFirstChild("Camera")
-
-            if UI.ViewNormal then
-                UI.ViewNormal.CurrentCamera = Camera
-            end
-
-            if UI.ViewSpecial then
-                UI.ViewSpecial.CurrentCamera = Camera
-            end
-
-            On()
-        end
-
-        local function Switch()
-            if not CanUse then
-                return
-            end
-
-            if not Scanner or not Scanner.Parent then
-                return
-            end
-
-            CanUse = false
-
-            local Humanoid = GetHumanoid()
-            local Animations = Scanner:FindFirstChild("Animations")
-
-            if Humanoid and Animations then
-                local FireAnimation = Animations:FindFirstChild("fire")
-
-                if FireAnimation then
-                    local Anim = Humanoid:LoadAnimation(FireAnimation)
-
-                    -- FIX: enum instead of string
-                    Anim.Priority = Enum.AnimationPriority.Action4
-                    Anim:Play()
                 end
+
+                table.clear(Connections)
+
+                State = false
             end
 
-            task.wait(0.3)
+            --------------------------------------------------
+            -- EQUIP
+            --------------------------------------------------
 
-            if State then
-                Off()
-            else
+            local function OnEquip()
+
+                if not LightningHaxAlive then
+                    return
+                end
+
+                SetTabletESPMode(true)
+
+                UI.Parent = Player.PlayerGui
+                UI.Enabled = true
+
+                ViewNormal.CurrentCamera = Camera
+                ViewSpecial.CurrentCamera = Camera
+
                 On()
             end
 
-            task.wait(1)
+            --------------------------------------------------
+            -- UNEQUIP
+            --------------------------------------------------
 
-            CanUse = true
+            local function OffUnequip()
+
+                if not LightningHaxAlive then
+                    return
+                end
+
+                SetTabletESPMode(false)
+
+                UI.Enabled = false
+
+                ViewNormal.CurrentCamera = nil
+                ViewSpecial.CurrentCamera = nil
+
+                Off()
+            end
+
+            --------------------------------------------------
+            -- SWITCH
+            --------------------------------------------------
+
+            local function Switch()
+
+                if not CanUse then
+                    return
+                end
+
+                CanUse = false
+
+                local Humanoid = GetHumanoid()
+                local Animations =
+                    Scanner:FindFirstChild("Animations")
+
+                if Humanoid and Animations then
+
+                    local FireAnimation =
+                        Animations:FindFirstChild("fire")
+
+                    if FireAnimation then
+
+                        local Anim =
+                            Humanoid:LoadAnimation(
+                                FireAnimation
+                            )
+
+                        Anim.Priority =
+                            Enum.AnimationPriority.Action4
+
+                        Anim:Play()
+                    end
+                end
+
+                task.wait(0.3)
+
+                if State then
+                    Off()
+                else
+                    On()
+                end
+
+                task.wait(1)
+
+                CanUse = true
+            end
+
+            --------------------------------------------------
+            -- CAMERA SETUP
+            --------------------------------------------------
+
+            Camera.Parent = UI
+            Camera.FieldOfView = 50
+
+            ViewNormal.CurrentCamera = Camera
+            ViewSpecial.CurrentCamera = Camera
+
+            --------------------------------------------------
+            -- PLAYERGUI
+            --------------------------------------------------
+
+            UI.Parent = Player.PlayerGui
+            UI.Enabled = false
+
+            --------------------------------------------------
+            -- BACKPACK
+            --------------------------------------------------
+
+            Scanner.Parent = Player.Backpack
+
+            --------------------------------------------------
+            -- CONNECTIONS
+            --------------------------------------------------
+
+            table.insert(
+                Connections,
+                Scanner.Equipped:Connect(OnEquip)
+            )
+
+            table.insert(
+                Connections,
+                Scanner.Unequipped:Connect(OffUnequip)
+            )
+
+            table.insert(
+                Connections,
+                Scanner.Activated:Connect(Switch)
+            )
+
+            --------------------------------------------------
+            -- DONE
+            --------------------------------------------------
+
+            Rayfield:Notify({
+                Title = "Pink Tablet",
+                Content = "Loaded successfully!",
+                Duration = 3,
+                Image = 4483362458
+            })
+
+        end, debug.traceback)
+
+        if not Success then
+            DebugError("Callback failed", ErrorMessage)
         end
-
-        -- Remove old tablet UI/state if this button was accidentally pressed twice
-        if UI.Parent ~= Plr.PlayerGui then
-            UI.Parent = Plr.PlayerGui
-        end
-
-        if Scanner.Parent ~= Plr.Backpack and Scanner.Parent ~= GetCharacter() then
-            Scanner.Parent = Plr.Backpack
-        end
-
-        table.insert(
-            Connections,
-            Scanner.Equipped:Connect(OnEquip)
-        )
-
-        table.insert(
-            Connections,
-            Scanner.Unequipped:Connect(OffUnequip)
-        )
-
-        table.insert(
-            Connections,
-            Scanner.Activated:Connect(Switch)
-        )
 
     end,
 })
