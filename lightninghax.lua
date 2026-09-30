@@ -562,295 +562,6 @@ HomeTab:CreateButton({
 })
 
 HomeTab:CreateButton({
-    Name = "Pink Tablet",
-    Callback = function()
-
-local Players = game:GetService("Players") 
-local TweenService = game:GetService("TweenService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-
-local Plr = Players.LocalPlayer
-local Character = Plr.Character or Plr.CharacterAdded:Wait()
-
-local CurrentRooms = workspace:WaitForChild("CurrentRooms", 9e9)
-
-local Assets = game:GetObjects("rbxassetid://12501464609")[1]
-Assets.Parent = ReplicatedStorage
-
-local Scanner = Assets.CrystalScanner
-local UI = Assets.ScreenUICrystal
-local OffS = UI.OffScreen
-
-local ItemsToRemove = {}
-local Stars = {}
-local Connections = {}
-
-local State = false
-local CanUse = true
-
-local TabletID = math.random(1, 999999999)
-
-function MoveRoomToViewport(Room : Model)
-	local Clone = Room:Clone()
-
-	for _, v in ipairs(Clone:GetDescendants()) do
-		if v:IsA("Highlight")
-			or v:IsA("BoxHandleAdornment")
-			or v:IsA("BillboardGui")
-			or string.find(v.Name, "ESP", 1, true) then
-			v:Destroy()
-		end
-	end
-
-	Clone.Parent = UI.ViewNormal
-	
-	for _,v in pairs(Clone:QueryDescendants("Sound")) do
-		v:Destroy()
-	end
-	
-	ItemsToRemove[#ItemsToRemove + 1] = Clone
-end
-
-function MarkObject(Object, Prompt)
-	if Object:GetAttribute("TabletMark_"..TabletID) then return end
-
-	local Marked = Object.PrimaryPart
-	local S = MarkObjectWithStar(Marked)
-	
-	if Prompt then
-		local C_; C_ = Prompt.Triggered:Connect(function()
-        if not LightningHaxAlive then return end
-			C_:Disconnect()
-			
-			TweenService:Create(S, TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),{
-				Transparency = 1
-			}):Play()
-
-			task.delay(1, function()
-				S:Destroy()
-			end)
-		end)
-	end
-	
-	local Room = Object:FindFirstAncestorWhichIsA("Model")
-	Room.Destroying:Connect(function()
-        if not LightningHaxAlive then return end
-		S:Destroy()
-	end)
-	
-	Object:SetAttribute("TabletMark_"..TabletID, true)
-end
-
-function MarkObjectWithStar(Object : BasePart)
-	local NewStar = Assets.Star:Clone()
-	NewStar.Parent = UI.ViewSpecial
-	NewStar.Position = Object.Position
-	NewStar.Color = Color3.new(1, 1, 1)
-	
-	local Index = #Stars + 1
-	
-	Object.Destroying:Connect(function()
-        if not LightningHaxAlive then return end
-		table.remove(Stars, Index)
-		
-		TweenService:Create(NewStar, TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),{
-			Transparency = 1
-		}):Play()
-		
-		task.delay(1, function()
-			NewStar:Destroy()
-		end)
-	end)
-	
-	Stars[#Stars + 1] = NewStar
-	
-	return NewStar
-end
-
-function DisplayStatic()
-	Scanner.Handle.Use:Play()
-	UI.Static2.ImageTransparency = 0
-	UI.ViewSpecial.ImageTransparency = 1
-	
-	TweenService:Create(UI.ViewSpecial, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),{
-		ImageTransparency = 0
-	}):Play()
-	
-	TweenService:Create(UI.Static2, TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),{
-		ImageTransparency = 1
-	}):Play()
-end
-
-function TurnOffAnimation()
-	Scanner.Handle.Disable:Play()
-	
-	OffS.Visible = true
-	OffS.Frame.Size = UDim2.fromScale(1, 1)
-	
-	TweenService:Create(OffS.Frame, TweenInfo.new(.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),{
-		Size = UDim2.fromScale(1, .1)
-	}):Play()
-	
-	task.wait(.5)
-	
-	TweenService:Create(OffS.Frame, TweenInfo.new(.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),{
-		Size = UDim2.fromScale(0, .1)
-	}):Play()
-end
-
-function Switch()
-	if not CanUse then
-		return false
-	end
-	
-	CanUse = false
-	
-	local Anim = Character.Humanoid:LoadAnimation(Scanner.Animations.fire)
-	Anim.Priority = "Action4"
-	Anim:Play()
-	
-	task.wait(.3)
-	
-	if State == false then
-		On()
-	else
-	
-		Off()
-	end
-	
-	task.wait(1)
-	
-	CanUse = true
-end
-
-function CameraStaticMover(Static)
-	local RNG = math.random(-100, 100)
-	local RNG1 = math.random(-100, 100)
-	Static.Position = UDim2.new(0.5, RNG, 0.5, RNG1)
-end
-
-function Update()
-	local RoomId = Plr:GetAttribute("CurrentRoom")
-	local CurrentRoom = CurrentRooms:FindFirstChild(RoomId)
-	
-	for _, v in pairs(ItemsToRemove) do
-		v:Destroy()
-	end
-
-	if CurrentRooms:FindFirstChild(RoomId - 1) then
-		MoveRoomToViewport(CurrentRooms[RoomId - 1]) -- Previous room
-	end
-
-	MoveRoomToViewport(CurrentRoom) -- Current room
-
-	if CurrentRooms:FindFirstChild(RoomId + 1) then
-		MoveRoomToViewport(CurrentRooms[RoomId + 1]) -- Next room
-	end
-
-	local ToFind = {
-		"LeverForGate"
-	}
-
-	for _, v in next, CurrentRoom:QueryDescendants("ProximityPrompt") do
-		local ancestor = v:FindFirstAncestorWhichIsA("Model")
-		if
-			v.Name == "ModulePrompt"
-			or v.Name == "HidingPrompt"
-			or table.find(ToFind, ancestor.Name)
-		then
-			MarkObject(ancestor, v)
-		end
-	end
-end
-
-local OGLight = Scanner.Handle.Screen.SurfaceLight.Brightness
-
-function On()
-	DisplayStatic()
-	OffS.Visible = false
-	
-	TweenService:Create(Scanner.Handle.Screen.SurfaceLight, TweenInfo.new(.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),{
-		Brightness = OGLight
-	}):Play()
-	
-	State = true
-	
-	Update()
-	
-	Connections.CurrentRoomChanged = Plr:GetAttributeChangedSignal("CurrentRoom"):Connect(function()
-        if not LightningHaxAlive then return end
-		if State then
-			DisplayStatic()
-			Update()
-		end
-	end)
-	
-	task.spawn(function()
-		while RunService.PreRender:Wait() do
-			if not State then 
-				break 
-			end
-			
-			for _,v in pairs(Stars) do
-				v.CFrame = CFrame.lookAt(v.Position, Scanner.Handle.Position)
-			end
-			
-			CameraStaticMover(UI.Static1)
-			CameraStaticMover(UI.Static2)
-			
-			UI.Camera.CFrame = Scanner.Handle.CFrame * CFrame.Angles(0, math.rad(180), 0) * CFrame.new(0, 0, -.3)
-		end
-	end)
-end
-
-function Off()
-	task.spawn(function()
-		TurnOffAnimation()
-	end)
-	
-	task.spawn(function()
-		TweenService:Create(Scanner.Handle.Screen.SurfaceLight, TweenInfo.new(.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),{
-			Brightness = 0
-		}):Play()
-	end)
-	
-	for _, v in pairs(Connections) do
-		v:Disconnect()
-	end
-	Connections = {}
-	
-	State = false
-end
-
-function OffUnequip()
-	SetTabletESPMode(false)
-	UI.Enabled = false
-	UI.ViewNormal.CurrentCamera = nil
-	UI.ViewSpecial.CurrentCamera = nil
-	
-	Off()
-end
-
-function OnEquip()
-	SetTabletESPMode(true)
-	UI.Enabled = true
-	UI.ViewNormal.CurrentCamera = UI.Camera
-	UI.ViewSpecial.CurrentCamera = UI.Camera
-	
-	On()
-end
-
-Scanner.Equipped:Connect(OnEquip)
-Scanner.Unequipped:Connect(OffUnequip)
-Scanner.Activated:Connect(Switch)
-
-UI.Parent = Plr.PlayerGui
-Scanner.Parent = Plr.Backpack
-    end,
-})
-
-HomeTab:CreateButton({
     Name = "Buff Figure [ SEEK ]",
     Callback = function()
 
@@ -1590,7 +1301,10 @@ ExploitsTab:CreateToggle({
 
 local DisableRansomEnabled = false
 local RansomHookInstalled = false
+local RansomOldNamecall
+
 local RansomModuleHookInstalled = false
+local RansomOriginalEntry
 
 local function FindRansomInfect()
     local player = game:GetService("Players").LocalPlayer
@@ -1625,14 +1339,22 @@ local function InstallRansomModuleHook()
     local ok, entry = pcall(require, module)
     if not ok or type(entry) ~= "function" then return false end
 
+    RansomOriginalEntry = entry
     local original
-    original = hookfunction(entry, function(...)
-        -- Block the Ransom client routine at its entry point. This prevents its
-        -- infection sequence before its own animation/sound/UI code can run.
+    original = hookfunction(entry, function(p77, p78, p79, p80)
         if LightningHaxAlive and DisableRansomEnabled then
+            if p79 == nil and p80 == nil and p78 then
+                local remote = p78:FindFirstChild("RansomAttack")
+                if remote and remote:IsA("RemoteEvent") then
+                    pcall(function()
+                        remote:FireServer("didnt")
+                    end)
+                end
+            end
             return
         end
-        return original(...)
+
+        return original(p77, p78, p79, p80)
     end)
 
     RansomModuleHookInstalled = true
@@ -1645,12 +1367,9 @@ local function InstallRansomHook()
 
     local old
     old = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-        local method = getnamecallmethod()
         local args = {...}
+        local method = getnamecallmethod()
 
-        -- Keep the confirmed server-side proc prevention, but do not hook
-        -- generic Play/TweenService calls: those can interfere with camera,
-        -- mouse and Rayfield itself.
         if LightningHaxAlive
             and DisableRansomEnabled
             and method == "FireServer"
@@ -1665,6 +1384,7 @@ local function InstallRansomHook()
         return old(self, ...)
     end))
 
+    RansomOldNamecall = old
     RansomHookInstalled = true
     return true
 end
@@ -1677,11 +1397,19 @@ ExploitsTab:CreateToggle({
         DisableRansomEnabled = Value
 
         if Value then
-            -- Install only the Ransom-specific hooks. No global animation,
-            -- sound, tween, camera or input interception is performed.
+            -- This is the previously confirmed working proc-block path.
             pcall(InstallRansomModuleHook)
             pcall(InstallRansomHook)
         end
+    end
+})
+
+ExploitsTab:CreateToggle({
+    Name = "Disable Eyes",
+    CurrentValue = false,
+    Flag = "DisableEyes",
+    Callback = function(Value)
+        DisableEyesEnabled=Value
     end
 })
 
@@ -2209,17 +1937,81 @@ local function IsObjectInESPRange(obj)
 end
 
 local function AddHighlight(target, name, color, fillTransparency)
-    if not target or not target.Parent or target:FindFirstChild(name) then return end
-    local h = Instance.new("Highlight")
-    h.Name = name
-    h.Adornee = target
-    h.FillColor = color
-    h.OutlineColor = color
-    h.FillTransparency = fillTransparency or 0.75
-    h.OutlineTransparency = 0
-    h.DepthMode = TabletViewActive and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop
-    h.Parent = target
-    return h
+    if not target or not target.Parent then return end
+
+    local existing = target:FindFirstChild(name)
+    if existing then
+        existing:Destroy()
+    end
+
+    local adornee
+    local boxSize
+    local boxCFrame
+
+    if target:IsA("BasePart") then
+        adornee = target
+        boxSize = target.Size
+        boxCFrame = CFrame.identity
+
+    elseif target:IsA("Model") then
+        local success, cf, size = pcall(function()
+            return target:GetBoundingBox()
+        end)
+
+        if not success then
+            return
+        end
+
+        adornee = Instance.new("Part")
+        adornee.Name = name
+        adornee.Anchored = true
+        adornee.CanCollide = false
+        adornee.CanTouch = false
+        adornee.CanQuery = false
+        adornee.Transparency = 1
+        adornee.Size = Vector3.new(0.1, 0.1, 0.1)
+        adornee.CFrame = cf
+        adornee.Parent = target
+
+        boxSize = size
+        boxCFrame = CFrame.identity
+
+    else
+        return
+    end
+
+    local box = Instance.new("BoxHandleAdornment")
+    box.Name = name
+    box.Adornee = adornee
+    box.Size = boxSize
+    box.CFrame = boxCFrame
+    box.Color3 = color or Color3.new(1, 1, 1)
+    box.Transparency = 0.15
+    box.AlwaysOnTop = not TabletViewActive
+    box.ZIndex = 10
+    box.Parent = adornee
+
+    if target:IsA("Model") then
+        local connection
+
+        connection = game:GetService("RunService").RenderStepped:Connect(function()
+            if not target.Parent or not adornee.Parent or not box.Parent then
+                connection:Disconnect()
+                return
+            end
+
+            local ok, newCF, newSize = pcall(function()
+                return target:GetBoundingBox()
+            end)
+
+            if ok then
+                adornee.CFrame = newCF
+                box.Size = newSize
+            end
+        end)
+    end
+
+    return box
 end
 
 local function RemoveNamedESP(...)
